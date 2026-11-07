@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script src="playgama-bridge.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b1633">
+<title>Ornament Sort</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="scene"></canvas>
+
+  <div id="hud" class="hidden">
+    <div id="topbar" class="bar">
+      <button id="btn-levels" class="icon-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+      </button>
+      <div class="level-info">
+        <div id="level-label"></div>
+        <div id="moves-label"></div>
+      </div>
+      <button id="btn-sound" class="icon-btn" type="button">
+        <svg class="snd-on" viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M3.5 9.2h3.8l5-4.2v14l-5-4.2H3.5z"/><path d="M15.8 8.6a4.8 4.8 0 0 1 0 6.8"/><path d="M18.4 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <svg class="snd-off" viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M3.5 9.2h3.8l5-4.2v14l-5-4.2H3.5z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+      </button>
+    </div>
+    <div id="bottombar" class="bar">
+      <button id="btn-undo" class="icon-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 13.5L4 9l4.5-4.5"/><path d="M4.5 9H14a6 6 0 0 1 0 12h-3"/></svg>
+        <span id="undo-count" class="badge">5</span>
+      </button>
+      <button id="btn-extra" class="ad-btn hidden" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4.5" width="19" height="13" rx="3"/><path class="fill" d="M10 8.2v5.6l4.6-2.8z"/><path d="M8 20.5h8"/></svg>
+        <span id="extra-label"></span>
+      </button>
+      <button id="btn-restart" class="icon-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.8 4.2v4.6h-4.6"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="hint-chip" class="hidden"></div>
+  <div id="hand" class="hidden">
+    <svg viewBox="0 0 64 72" aria-hidden="true">
+      <path d="M24 6c0-3.3 2.7-6 6-6s6 2.7 6 6v22.5c1-1.6 2.7-2.6 4.7-2.6 2.6 0 4.7 1.8 5.3 4.2 1-1.1 2.4-1.8 4-1.8 3 0 5.4 2.4 5.4 5.4v1.6c.9-.6 2-1 3.1-1 3 0 5.5 2.4 5.5 5.5V48c0 13.3-10 24-23 24h-4.4c-7 0-13.4-3.6-17-9.6L4.4 46.6c-1.7-2.8-.9-6.5 1.9-8.3 2.6-1.7 6-1.2 8 1.1l9.7 10.7V6z"/>
+    </svg>
+    <span class="ring"></span>
+  </div>
+  <div id="toast" class="hidden"></div>
+
+  <div id="title-screen" class="overlay hidden">
+    <div class="title-wrap">
+      <h1 id="title-text"></h1>
+      <p id="subtitle-text"></p>
+      <button id="btn-play" class="btn primary big" type="button"></button>
+    </div>
+  </div>
+
+  <div id="win-modal" class="overlay modal hidden">
+    <div class="card">
+      <div class="ribbon"><span id="win-title"></span></div>
+      <p id="win-sub"></p>
+      <div class="stars">
+        <svg class="star" viewBox="0 0 24 24"><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>
+        <svg class="star mid" viewBox="0 0 24 24"><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>
+        <svg class="star" viewBox="0 0 24 24"><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>
+      </div>
+      <p id="win-moves"></p>
+      <div class="row">
+        <button id="btn-replay" class="btn secondary" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.8 4.2v4.6h-4.6"/></svg>
+          <span id="replay-label"></span>
+        </button>
+        <button id="btn-next" class="btn primary" type="button"><span id="next-label"></span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="levels-modal" class="overlay modal hidden">
+    <div class="card levels-card">
+      <div class="ribbon"><span id="levels-title"></span></div>
+      <button id="btn-close-levels" class="close-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div id="levels-grid"></div>
+    </div>
+  </div>
+
+  <div id="boot"><div class="spinner"></div></div>
+</div>
+
+<script>
+/* Boot: the Bridge must be initialized before the game loads anything else. */
+(function () {
+  var files = ['js/rules.js', 'js/levels-data.js', 'js/i18n.js', 'js/audio.js', 'js/game.js'];
+  function load(i) {
+    if (i >= files.length) { window.OSGame.start(); return; }
+    var s = document.createElement('script');
+    s.src = files[i];
+    s.onload = function () { load(i + 1); };
+    document.body.appendChild(s);
+  }
+  var init;
+  try {
+    init = window.bridge ? window.bridge.initialize() : Promise.reject(new Error('Bridge script missing'));
+  } catch (e) {
+    init = Promise.reject(e);
+  }
+  init.then(function () {
+    window.OS_BRIDGE_READY = true;
+  }, function (e) {
+    window.OS_BRIDGE_READY = false;
+    console.warn('Bridge initialization failed, running without it:', e);
+  }).then(function () { load(0); });
+})();
+</script>
+</body>
+</html>
