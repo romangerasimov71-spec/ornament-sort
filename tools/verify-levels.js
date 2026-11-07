@@ -10,10 +10,14 @@
  * 3. Replays that solution with the game's own rules (js/rules.js) and checks
  *    that the game also sees the level as solved.
  *
- *   node tools/verify-levels.js        -> exit code 0 when all levels pass
+ *   node tools/verify-levels.js                        -> exit code 0 when all levels pass
+ *   node tools/verify-levels.js prototype/index.html   -> checks the prototype's levels
  */
 'use strict';
-const LEVELS = require('../js/levels-data.js');
+const fs = require('fs');
+const LEVELS = process.argv[2]
+  ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8').match(/<script type="application\/json" id="levels">([\s\S]*?)<\/script>/)[1])
+  : require('../js/levels-data.js');
 const Game = require('../js/rules.js');
 
 // ---- independent solver ---------------------------------------------------
