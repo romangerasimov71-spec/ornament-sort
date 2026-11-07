@@ -16,7 +16,9 @@
   };
   var VOL = { music: 0.42, pick: 0.7, drop: 0.75, complete: 0.8, win: 0.85, button: 0.55, wrong: 0.6, reward: 0.8 };
 
-  var ctx = null, master = null, buffers = {}, elements = {};
+  var ctx = null, master = null, musicBus = null, sfxBus = null, buffers = {}, elements = {};
+  var mix = { musicOn: true, musicVol: 0.6, sfxOn: true, sfxVol: 0.8 };
+  var stats = { played: 0 };
   var unlocked = false, audible = false, musicSource = null, musicWanted = false, useElements = false;
 
   function decode(data) {
@@ -57,7 +59,7 @@
     if (!musicWanted || !unlocked) return;
     if (useElements) {
       var m = elements.music;
-      if (m && audible) { m.volume = VOL.music; var p = m.play(); if (p && p.catch) p.catch(function () {}); }
+      if (m && audible) { m.volume = musicLevel(); var p = m.play(); if (p && p.catch) p.catch(function () {}); }
       return;
     }
     if (musicSource || !buffers.music || !ctx) return;
@@ -69,12 +71,20 @@
     src.loopEnd = buffers.music.duration - 0.03;
     var g = ctx.createGain();
     g.gain.value = VOL.music;
-    src.connect(g).connect(master);
+    src.connect(g).connect(musicBus);
     src.start(0, 0.03);
     musicSource = src;
   }
 
+  function musicLevel() { return mix.musicOn ? VOL.music * mix.musicVol : 0; }
+  function applyMix() {
+    if (musicBus) musicBus.gain.value = mix.musicOn ? mix.musicVol : 0;
+    if (sfxBus) sfxBus.gain.value = mix.sfxOn ? mix.sfxVol : 0;
+    if (elements.music) elements.music.volume = musicLevel();
+  }
+
   function apply() {
+    applyMix();
     if (useElements) {
       Object.keys(elements).forEach(function (k) { elements[k].muted = !audible; });
       if (elements.music) {
@@ -108,6 +118,9 @@
           ctx = new AC();
           master = ctx.createGain();
           master.connect(ctx.destination);
+          musicBus = ctx.createGain(); musicBus.connect(master);
+          sfxBus = ctx.createGain(); sfxBus.connect(master);
+          applyMix();
           if (!audible) ctx.suspend().catch(function () {});
         } catch (e) { ctx = null; }
       }
@@ -131,13 +144,24 @@
       apply();
     },
     isAudible: function () { return audible; },
+    // separate music / effects switches and volumes (0..1)
+    setMix: function (m) {
+      mix.musicOn = !!m.musicOn; mix.sfxOn = !!m.sfxOn;
+      mix.musicVol = Math.max(0, Math.min(1, +m.musicVol || 0));
+      mix.sfxVol = Math.max(0, Math.min(1, +m.sfxVol || 0));
+      applyMix();
+    },
+    stats: function () {
+      return { state: ctx ? ctx.state : (useElements ? 'elements' : 'none'), music: !!musicSource, loaded: Object.keys(buffers).length,
+        played: stats.played, musicGain: musicBus ? musicBus.gain.value : null, sfxGain: sfxBus ? sfxBus.gain.value : null };
+    },
     play: function (name, rate) {
-      if (!audible || !unlocked) return;
+      if (!audible || !unlocked || !mix.sfxOn) return;
       if (useElements) {
         var el = elements[name];
         if (!el) return;
         var c = el.cloneNode();
-        c.volume = VOL[name] || 1;
+        c.volume = (VOL[name] || 1) * mix.sfxVol;
         var p = c.play();
         if (p && p.catch) p.catch(function () {});
         return;
@@ -149,8 +173,9 @@
       s.playbackRate.value = rate || 1;
       var g = ctx.createGain();
       g.gain.value = VOL[name] || 1;
-      s.connect(g).connect(master);
+      s.connect(g).connect(sfxBus);
       s.start();
+      stats.played++;
     }
   };
 })();

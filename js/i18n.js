@@ -27,7 +27,13 @@
       next: 'Next',
       replay: 'Replay',
       allDone: 'All levels done! More are on the way.',
-      close: 'Close'
+      close: 'Close',
+      settings: 'Settings',
+      music: 'Music',
+      sfx: 'Sounds',
+      musicVol: 'Music volume',
+      sfxVol: 'Sound volume',
+      locked: 'locked'
     },
     ru: {
       title: 'Новогодняя сортировка',
@@ -54,7 +60,13 @@
       next: 'Дальше',
       replay: 'Ещё раз',
       allDone: 'Все уровни пройдены! Скоро будут новые.',
-      close: 'Закрыть'
+      close: 'Закрыть',
+      settings: 'Настройки',
+      music: 'Музыка',
+      sfx: 'Звуки',
+      musicVol: 'Громкость музыки',
+      sfxVol: 'Громкость звуков',
+      locked: 'закрыт'
     }
   };
   var lang = 'en';

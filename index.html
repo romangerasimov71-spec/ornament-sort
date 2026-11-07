@@ -14,16 +14,15 @@
 
   <div id="hud" class="hidden">
     <div id="topbar" class="bar">
-      <button id="btn-levels" class="icon-btn" type="button">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+      <button id="btn-settings" class="icon-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2.8h3.4l.5 2.6 1.6.9 2.5-.9 1.7 2.9-2 1.7v1.9l2 1.7-1.7 2.9-2.5-.9-1.6.9-.5 2.6h-3.4l-.5-2.6-1.6-.9-2.5.9-1.7-2.9 2-1.7V11l-2-1.7 1.7-2.9 2.5.9 1.6-.9z"/><path d="M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
       </button>
-      <div class="level-info">
+      <div id="level-info" class="level-info" role="button">
         <div id="level-label"></div>
         <div id="moves-label"></div>
       </div>
-      <button id="btn-sound" class="icon-btn" type="button">
-        <svg class="snd-on" viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M3.5 9.2h3.8l5-4.2v14l-5-4.2H3.5z"/><path d="M15.8 8.6a4.8 4.8 0 0 1 0 6.8"/><path d="M18.4 6a8.5 8.5 0 0 1 0 12"/></svg>
-        <svg class="snd-off" viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M3.5 9.2h3.8l5-4.2v14l-5-4.2H3.5z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>
+      <button id="btn-levels" class="icon-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
       </button>
     </div>
     <div id="bottombar" class="bar">
@@ -85,6 +84,27 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
       <div id="levels-grid"></div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="overlay modal hidden">
+    <div class="card settings-card">
+      <div class="ribbon"><span id="settings-title"></span></div>
+      <button id="btn-close-settings" class="close-btn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+      <div class="set-row">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5.5l11-2.3V16"/><path d="M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/><path d="M20 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/></svg>
+        <span class="lbl" id="lbl-music"></span>
+        <button id="sw-music" class="switch" type="button" role="switch" aria-checked="true"></button>
+        <input id="vol-music" type="range" min="0" max="100" step="1">
+      </div>
+      <div class="set-row">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path class="fill" d="M3.5 9.2h3.8l5-4.2v14l-5-4.2H3.5z"/><path d="M15.8 8.6a4.8 4.8 0 0 1 0 6.8"/><path d="M18.4 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <span class="lbl" id="lbl-sfx"></span>
+        <button id="sw-sfx" class="switch" type="button" role="switch" aria-checked="true"></button>
+        <input id="vol-sfx" type="range" min="0" max="100" step="1">
+      </div>
     </div>
   </div>
 

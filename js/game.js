@@ -12,7 +12,7 @@
   var t = I18N.t;
 
   var UNDO_PER_LEVEL = 5;
-  var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_muted'];
+  var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_settings'];
 
   // ---------------------------------------------------------------- colors
   // Every color also has its own pattern, so ornaments differ not only by hue.
@@ -40,7 +40,10 @@
   var ui = {
     hud: $('hud'), topbar: $('topbar'), bottombar: $('bottombar'),
     levelLabel: $('level-label'), movesLabel: $('moves-label'),
-    btnLevels: $('btn-levels'), btnSound: $('btn-sound'), btnUndo: $('btn-undo'),
+    btnLevels: $('btn-levels'), btnSettings: $('btn-settings'), levelInfo: $('level-info'), btnUndo: $('btn-undo'),
+    settings: $('settings-modal'), settingsTitle: $('settings-title'), btnCloseSettings: $('btn-close-settings'),
+    swMusic: $('sw-music'), swSfx: $('sw-sfx'), volMusic: $('vol-music'), volSfx: $('vol-sfx'),
+    lblMusic: $('lbl-music'), lblSfx: $('lbl-sfx'),
     undoCount: $('undo-count'), btnExtra: $('btn-extra'), extraLabel: $('extra-label'),
     btnRestart: $('btn-restart'), chip: $('hint-chip'), hand: $('hand'), toast: $('toast'),
     title: $('title-screen'), titleText: $('title-text'), subtitle: $('subtitle-text'), btnPlay: $('btn-play'),
@@ -51,7 +54,7 @@
     btnCloseLevels: $('btn-close-levels'), boot: $('boot')
   };
 
-  var save = { level: 1, unlocked: 1, stars: [], muted: false };
+  var save = { level: 1, unlocked: 1, stars: [], settings: { musicOn: true, musicVol: 0.6, sfxOn: true, sfxVol: 0.8 } };
   var W = 0, H = 0, DPR = 1;
   var area = { x: 0, y: 0, w: 0, h: 0 };
   var garlandY = 0, garlandSag = 30;
@@ -92,8 +95,9 @@
     updateAudio();
   }
   function updateAudio() {
-    SND.setAudible(!save.muted && platformAudio && !isPaused());
-    ui.btnSound.classList.toggle('muted', save.muted);
+    // the platform's audio state and pauses silence everything; the settings set music / effects
+    SND.setMix(save.settings);
+    SND.setAudible(platformAudio && !isPaused());
   }
 
   // ---------------------------------------------------------------- helpers
@@ -994,8 +998,8 @@
       var sol = R.solveShortest(colorState(), G.cap, 5000);
       if (!sol || !sol.length) { hideHand(); return; }
       var m = sol[0];
-      if (G.selected === m[0]) { pointHand(m[1]); setChip(t('tut2')); }
-      else { pointHand(m[0]); setChip(t(G.history.length ? 'tut3' : 'tut1')); }
+      if (G.selected === m[0]) { pointHand(m[1], G.boxes[m[1]].length); setChip(t('tut2')); }
+      else { pointHand(m[0], G.boxes[m[0]].length - 1); setChip(t(G.history.length ? 'tut3' : 'tut1')); }
       return;
     }
     hideHand();
@@ -1008,9 +1012,12 @@
     ui.chip.classList.remove('hidden');
   }
 
-  var handTarget = -1;
-  function pointHand(b) {
+  // The fingertip points at slot `slot` of box `b`: the top ornament to take,
+  // or the free place where the ornament will land.
+  var handTarget = -1, handSlot = 0;
+  function pointHand(b, slot) {
     handTarget = b;
+    handSlot = slot;
     ui.hand.classList.remove('hidden');
     positionHand();
   }
@@ -1018,11 +1025,15 @@
     handTarget = -1;
     ui.hand.classList.add('hidden');
   }
+  function handPoint() {
+    if (handTarget < 0 || !layout.boxes[handTarget]) return null;
+    return slotPos(handTarget, handSlot);
+  }
   function positionHand() {
-    if (handTarget < 0 || !layout.boxes[handTarget]) return;
-    var B = layout.boxes[handTarget];
-    ui.hand.style.left = (B.x + B.w / 2) + 'px';
-    ui.hand.style.top = (B.y + B.h * 0.42) + 'px';
+    var p = handPoint();
+    if (!p) return;
+    ui.hand.style.left = p.x + 'px';
+    ui.hand.style.top = p.y + 'px';
   }
 
   function showToast(text, sec) {
@@ -1248,7 +1259,7 @@
     if (mode === 'title') {
       if (k === 'Enter' || k === ' ' || k === 'Spacebar') play();
       else handled = false;
-    } else if (!ui.levels.classList.contains('hidden')) {
+    } else if (!ui.levels.classList.contains('hidden') || !ui.settings.classList.contains('hidden')) {
       handled = false;                 // the level list uses normal Tab / Enter focus
     } else if (!ui.win.classList.contains('hidden')) {
       if (k === 'Enter' || k === ' ' || k === 'Spacebar' || k === 'n' || k === 'N') nextLevel();
@@ -1287,11 +1298,52 @@
     if (handled) e.preventDefault();
   }
 
+  // M key: everything off / on at once
   function toggleMute() {
-    save.muted = !save.muted;
+    var on = !(save.settings.musicOn || save.settings.sfxOn);
+    save.settings.musicOn = on;
+    save.settings.sfxOn = on;
+    settingsChanged();
+    if (on) SND.play('button');
+  }
+
+  // ================================================================ settings
+  // stored as text with a letter in front so the platform never turns it into a number
+  function settingsToString() {
+    var st = save.settings;
+    return 'v1:' + (st.musicOn ? 1 : 0) + ':' + Math.round(st.musicVol * 100) + ':' + (st.sfxOn ? 1 : 0) + ':' + Math.round(st.sfxVol * 100);
+  }
+  function parseSettings(v) {
+    if (typeof v !== 'string' || v.indexOf('v1:') !== 0) return;
+    var p = v.split(':');
+    save.settings.musicOn = p[1] === '1';
+    save.settings.musicVol = clamp((parseInt(p[2], 10) || 0) / 100, 0, 1);
+    save.settings.sfxOn = p[3] === '1';
+    save.settings.sfxVol = clamp((parseInt(p[4], 10) || 0) / 100, 0, 1);
+  }
+  function renderSettings() {
+    var st = save.settings;
+    ui.swMusic.setAttribute('aria-checked', String(st.musicOn));
+    ui.swSfx.setAttribute('aria-checked', String(st.sfxOn));
+    ui.volMusic.value = Math.round(st.musicVol * 100);
+    ui.volSfx.value = Math.round(st.sfxVol * 100);
+    ui.volMusic.disabled = !st.musicOn;
+    ui.volSfx.disabled = !st.sfxOn;
+  }
+  function settingsChanged() {
     updateAudio();
-    if (!save.muted) SND.play('button');
-    storageSet(['os_muted'], [save.muted ? '1' : '0']);
+    renderSettings();
+    storageSet(['os_settings'], [settingsToString()]);
+  }
+  function openSettings() {
+    SND.play('button');
+    renderSettings();
+    ui.settings.classList.remove('hidden');
+    ui.btnCloseSettings.focus({ preventScroll: true });
+  }
+  function closeSettings() {
+    SND.play('button');
+    ui.settings.classList.add('hidden');
   }
 
   function watchAdForBox() {
@@ -1310,6 +1362,7 @@
     var grid = ui.levelsGrid;
     grid.innerHTML = '';
     var star = '<svg viewBox="0 0 24 24"><path d="M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.2l-5.8 3.2 1.2-6.5L2.6 9.4l6.5-.8z"/></svg>';
+    var check = '<span class="check"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
     var lock = '<svg class="lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
     for (var i = 0; i < LEVELS.length; i++) {
       var btn = document.createElement('button');
@@ -1317,15 +1370,19 @@
       btn.className = 'lv';
       var open = i < save.unlocked;
       var st = save.stars[i] || 0;
-      if (!open) { btn.disabled = true; btn.innerHTML = lock; }
-      else {
+      btn.setAttribute('data-level', String(i));
+      btn.addEventListener('click', onLevelPick);
+      if (!open) {
+        btn.classList.add('locked');
+        btn.innerHTML = lock;
+        btn.setAttribute('aria-label', t('level', { n: i + 1 }) + ' — ' + t('locked'));
+      } else {
         if (G && i === G.index) btn.classList.add('current');
         else if (st) btn.classList.add('done');
         var mini = '<span class="mini">';
         for (var s = 0; s < 3; s++) mini += '<span class="' + (s < st ? 'on' : '') + '">' + star + '</span>';
-        btn.innerHTML = '<span>' + (i + 1) + '</span>' + mini + '</span>';
-        btn.setAttribute('data-level', String(i));
-        btn.addEventListener('click', onLevelPick);
+        btn.innerHTML = '<span>' + (i + 1) + '</span>' + mini + '</span>' + (st ? check : '');
+        btn.setAttribute('aria-label', t('level', { n: i + 1 }));
       }
       grid.appendChild(btn);
     }
@@ -1338,8 +1395,11 @@
   }
   function onLevelPick(e) {
     var i = parseInt(e.currentTarget.getAttribute('data-level'), 10);
+    if (i >= save.unlocked) { SND.play('wrong'); return; }   // locked: nothing happens
     ui.levels.classList.add('hidden');
     SND.play('button');
+    // remember the chosen level so a reload resumes on it (one write per explicit choice)
+    if (save.level !== i + 1) { save.level = i + 1; storageSet(['os_level'], [String(save.level)]); }
     startLevel(i);
   }
   function closeLevels() {
@@ -1360,7 +1420,16 @@
     ui.btnUndo.setAttribute('aria-label', t('undo'));
     ui.btnRestart.setAttribute('aria-label', t('restart'));
     ui.btnLevels.setAttribute('aria-label', t('levels'));
-    ui.btnSound.setAttribute('aria-label', t('sound'));
+    ui.btnSettings.setAttribute('aria-label', t('settings'));
+    ui.levelInfo.setAttribute('aria-label', t('levels'));
+    ui.settingsTitle.textContent = t('settings');
+    ui.lblMusic.textContent = t('music');
+    ui.lblSfx.textContent = t('sfx');
+    ui.swMusic.setAttribute('aria-label', t('music'));
+    ui.swSfx.setAttribute('aria-label', t('sfx'));
+    ui.volMusic.setAttribute('aria-label', t('musicVol'));
+    ui.volSfx.setAttribute('aria-label', t('sfxVol'));
+    ui.btnCloseSettings.setAttribute('aria-label', t('close'));
     ui.btnExtra.setAttribute('aria-label', t('extra'));
     ui.btnCloseLevels.setAttribute('aria-label', t('close'));
   }
@@ -1385,7 +1454,7 @@
     save.stars = [];
     var s = typeof v[2] === 'string' && v[2].charAt(0) === 's' ? v[2].slice(1) : '';
     for (var i = 0; i < s.length && i < LEVELS.length; i++) save.stars[i] = clamp(parseInt(s[i], 10) || 0, 0, 3);
-    save.muted = v[3] === '1' || v[3] === 1 || v[3] === true || v[3] === 'true';
+    parseSettings(v[3]);
   }
 
   function bindEvents() {
@@ -1401,7 +1470,18 @@
     ui.btnPlay.addEventListener('click', play);
     ui.btnUndo.addEventListener('click', function () { SND.unlock(); undo(); });
     ui.btnRestart.addEventListener('click', function () { SND.unlock(); restart(); });
-    ui.btnSound.addEventListener('click', function () { SND.unlock(); toggleMute(); });
+    ui.btnSettings.addEventListener('click', function () { SND.unlock(); openSettings(); });
+    ui.levelInfo.addEventListener('click', function () { SND.unlock(); if (mode === 'play') openLevels(); });
+    ui.btnCloseSettings.addEventListener('click', closeSettings);
+    ui.settings.addEventListener('pointerdown', function (e) { if (e.target === ui.settings) closeSettings(); });
+    ui.levels.addEventListener('pointerdown', function (e) { if (e.target === ui.levels) closeLevels(); });
+    ui.swMusic.addEventListener('click', function () { save.settings.musicOn = !save.settings.musicOn; settingsChanged(); SND.play('button'); });
+    ui.swSfx.addEventListener('click', function () { save.settings.sfxOn = !save.settings.sfxOn; settingsChanged(); SND.play('button'); });
+    // sliders: live volume while dragging, saved once when released
+    ui.volMusic.addEventListener('input', function () { save.settings.musicVol = ui.volMusic.value / 100; updateAudio(); });
+    ui.volSfx.addEventListener('input', function () { save.settings.sfxVol = ui.volSfx.value / 100; updateAudio(); });
+    ui.volMusic.addEventListener('change', settingsChanged);
+    ui.volSfx.addEventListener('change', function () { settingsChanged(); SND.play('drop'); });
     ui.btnLevels.addEventListener('click', function () { SND.unlock(); openLevels(); });
     ui.btnCloseLevels.addEventListener('click', closeLevels);
     ui.btnExtra.addEventListener('click', function () { SND.unlock(); watchAdForBox(); });
@@ -1487,6 +1567,8 @@
         save: JSON.parse(JSON.stringify(save)),
         paused: isPaused(),
         audible: SND.isAudible(),
+        audio: SND.stats(),
+        hand: ui.hand.classList.contains('hidden') ? null : handPoint(),
         lang: I18N.lang()
       };
     }
