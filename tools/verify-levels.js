@@ -16,7 +16,7 @@
 'use strict';
 const fs = require('fs');
 const LEVELS = process.argv[2]
-  ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8').match(/<script type="application\/json" id="levels">([\s\S]*?)<\/script>/)[1])
+  ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8').match(/<script type="application\/json" id="levels-data">([\s\S]*?)<\/script>/)[1])
   : require('../js/levels-data.js');
 const Game = require('../js/rules.js');
 

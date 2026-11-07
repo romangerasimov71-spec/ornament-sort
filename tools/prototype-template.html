@@ -70,6 +70,21 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
   box-shadow: 0 2px 4px rgba(0,0,0,.3); transition: transform .2s; }
 .switch[aria-checked="true"] { background: #1f8a52; }
 .switch[aria-checked="true"]::after { transform: translateX(24px); }
+#level-info { pointer-events: auto; cursor: pointer; min-width: 0; }
+#level-label, #moves-label { overflow: hidden; text-overflow: ellipsis; }
+.card .row { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.btn.green { background: linear-gradient(#36b06d, #187243); box-shadow: inset 0 0 0 2px rgba(255,255,255,.3), 0 4px 0 #0c4127, 0 8px 18px rgba(0,0,0,.3); }
+.card.levels { width: min(420px, 100%); }
+#level-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: clamp(6px, 2vmin, 12px); margin-top: 10px; }
+.lv { position: relative; aspect-ratio: 1 / 1.1; min-height: 52px; max-height: 84px; border-radius: 14px; color: #fff; font-weight: 900;
+  font-size: clamp(18px, min(5.4vw, 5vh), 26px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: linear-gradient(#3f7fc9, #234f8c); box-shadow: inset 0 0 0 2px rgba(255,255,255,.3), 0 3px 0 #15325d; }
+.lv.passed { background: linear-gradient(#36b06d, #187243); box-shadow: inset 0 0 0 2px rgba(255,255,255,.3), 0 3px 0 #0c4127; }
+.lv.current { background: linear-gradient(#f2545f, #b81f2c); box-shadow: inset 0 0 0 2px rgba(255,255,255,.45), 0 3px 0 #6e0f19, 0 0 0 3px #ffd36b; }
+.lv.locked { background: linear-gradient(#a99c88, #857865); box-shadow: inset 0 0 0 2px rgba(255,255,255,.2), 0 3px 0 #5d5344; cursor: default; }
+.lv svg { width: 40%; height: auto; max-width: 24px; }
+.lv svg path, .lv svg rect { stroke-width: 3; }
+.lv.passed svg path { stroke: #ffe28a; }
 .set-note { margin: 4px 0 0; font-size: 13px; font-weight: 600; opacity: .7; }
 </style>
 </head>
@@ -79,8 +94,10 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
   <button id="btn-settings" class="icon-btn" type="button" aria-label="Настройки">
     <svg viewBox="0 0 24 24"><path d="M10.3 2.8h3.4l.5 2.6 1.6.9 2.5-.9 1.7 2.9-2 1.7v1.9l2 1.7-1.7 2.9-2.5-.9-1.6.9-.5 2.6h-3.4l-.5-2.6-1.6-.9-2.5.9-1.7-2.9 2-1.7V11l-2-1.7 1.7-2.9 2.5.9 1.6-.9z"/><path d="M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
   </button>
-  <div class="level-info"><div id="level-label"></div><div id="moves-label"></div></div>
-  <div class="spacer"></div>
+  <div id="level-info" class="level-info" role="button" aria-label="Уровни"><div id="level-label"></div><div id="moves-label"></div></div>
+  <button id="btn-levels" class="icon-btn" type="button" aria-label="Уровни">
+    <svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>
+  </button>
 </div>
 <div id="bottombar" class="bar">
   <button id="btn-undo" class="icon-btn" type="button" aria-label="Отменить ход">
@@ -99,7 +116,10 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
   <div class="card">
     <div class="ribbon" id="win-title"></div>
     <p id="win-text"></p>
-    <button id="btn-next" class="btn" type="button"></button>
+    <div class="row">
+      <button id="btn-pick" class="btn green hidden" type="button">Выбрать уровень</button>
+      <button id="btn-next" class="btn" type="button"></button>
+    </div>
   </div>
 </div>
 
@@ -124,7 +144,17 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
   </div>
 </div>
 
-<script type="application/json" id="levels">
+<div id="levels" class="overlay hidden">
+  <div class="card levels">
+    <div class="ribbon">Уровни</div>
+    <button id="btn-close-levels" class="close-btn" type="button" aria-label="Закрыть">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <div id="level-grid"></div>
+  </div>
+</div>
+
+<script type="application/json" id="levels-data">
 /*LEVELS*/
 </script>
 <script>
@@ -134,7 +164,7 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
 (function () {
   'use strict';
   var R = window.OSRules;
-  var LEVELS = JSON.parse(document.getElementById('levels').textContent);
+  var LEVELS = JSON.parse(document.getElementById('levels-data').textContent);
   // ---------------------------------------------------------------- sound (CC0 mp3 files embedded below, see CREDITS.md)
   var AUDIO = /*AUDIO*/;
   var VOL = { pick: 0.7, drop: 0.75, complete: 0.8, win: 0.85, button: 0.55, wrong: 0.6 };
@@ -144,6 +174,18 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
     var stored = JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || 'null');
     if (stored) for (var sk in settings) if (typeof stored[sk] === typeof settings[sk]) settings[sk] = stored[sk];
   } catch (e) { /* storage blocked: keep defaults */ }
+  // progress (prototype only; the full build saves through the Bridge)
+  var PROGRESS_KEY = 'ornament-sort-proto-progress';
+  var progress = { passed: [], last: 0 };
+  try {
+    var sp = JSON.parse(window.localStorage.getItem(PROGRESS_KEY) || 'null');
+    if (sp && Array.isArray(sp.passed)) progress.passed = sp.passed.map(Boolean);
+    if (sp && typeof sp.last === 'number') progress.last = sp.last;
+  } catch (e) { /* storage blocked: start fresh */ }
+  function saveProgress() {
+    try { window.localStorage.setItem(PROGRESS_KEY, JSON.stringify(progress)); } catch (e) { /* ignore */ }
+  }
+  function isOpen(i) { return i === 0 || !!progress.passed[i] || !!progress.passed[i - 1]; }
   function saveSettings() {
     try { window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) { /* ignore */ }
   }
@@ -223,6 +265,8 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
     topbar: $('topbar'), bottombar: $('bottombar'), levelLabel: $('level-label'), movesLabel: $('moves-label'),
     btnUndo: $('btn-undo'), btnRestart: $('btn-restart'), chip: $('hint-chip'), hand: $('hand'),
     win: $('win'), winTitle: $('win-title'), winText: $('win-text'), btnNext: $('btn-next'),
+    btnLevels: $('btn-levels'), levelInfo: $('level-info'), levels: $('levels'), levelGrid: $('level-grid'),
+    btnCloseLevels: $('btn-close-levels'), btnPick: $('btn-pick'),
     btnSettings: $('btn-settings'), settings: $('settings'), btnCloseSettings: $('btn-close-settings'),
     swMusic: $('sw-music'), swSfx: $('sw-sfx'), volMusic: $('vol-music'), volSfx: $('vol-sfx')
   };
@@ -252,6 +296,7 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
 
   function startLevel(index) {
     var data = LEVELS[index];
+    if (progress.last !== index) { progress.last = index; saveProgress(); }
     G = {
       index: index, cap: data.c,
       boxes: data.b.map(function (box) {
@@ -318,6 +363,9 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
     });
     if (!undoCount && R.isSolved(cs, G.cap)) {
       G.won = true;
+      progress.passed[G.index] = true;
+      progress.last = Math.min(G.index + 1, LEVELS.length - 1);
+      saveProgress();
       G.winAt = now + 0.07 * count + 0.75;
       hideHand();
       ui.chip.classList.add('hidden');
@@ -342,6 +390,7 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
     ui.winTitle.textContent = last ? 'Прототип пройден!' : 'Отлично!';
     ui.winText.textContent = last ? 'Все 5 уровней собраны. Спасибо за игру!' : 'Уровень ' + (G.index + 1) + ' пройден за ' + G.moves + ' ходов';
     ui.btnNext.textContent = last ? 'Сыграть снова' : 'Дальше';
+    ui.btnPick.classList.toggle('hidden', !last);
     ui.win.classList.remove('hidden');
   }
 
@@ -435,6 +484,46 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
   ui.btnRestart.addEventListener('click', restart);
   ui.btnNext.addEventListener('click', nextLevel);
 
+  var CHECK = '<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+  var LOCK = '<svg viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></svg>';
+  function openLevels() {
+    SND.play('button');
+    ui.levelGrid.innerHTML = '';
+    LEVELS.forEach(function (lv, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lv';
+      b.setAttribute('data-level', String(i));
+      if (!isOpen(i)) { b.classList.add('locked'); b.innerHTML = LOCK; b.setAttribute('aria-label', 'Уровень ' + (i + 1) + ' закрыт'); }
+      else {
+        if (G && i === G.index) b.classList.add('current');
+        else if (progress.passed[i]) b.classList.add('passed');
+        b.innerHTML = '<span>' + (i + 1) + '</span>' + (progress.passed[i] ? CHECK : '');
+        b.setAttribute('aria-label', 'Уровень ' + (i + 1));
+      }
+      b.addEventListener('click', function () {
+        if (!isOpen(i)) { SND.play('wrong'); return; }
+        ui.levels.classList.add('hidden');
+        SND.play('button');
+        startLevel(i);
+      });
+      ui.levelGrid.appendChild(b);
+    });
+    ui.win.classList.add('hidden');
+    ui.levels.classList.remove('hidden');
+  }
+  function closeLevels() {
+    SND.play('button');
+    ui.levels.classList.add('hidden');
+    // closing the list after the last level should not leave an empty finished board
+    if (G && G.won) startLevel(G.index + 1 >= LEVELS.length ? 0 : G.index + 1);
+  }
+  ui.btnLevels.addEventListener('click', openLevels);
+  ui.levelInfo.addEventListener('click', openLevels);
+  ui.btnPick.addEventListener('click', openLevels);
+  ui.btnCloseLevels.addEventListener('click', closeLevels);
+  ui.levels.addEventListener('pointerdown', function (e) { if (e.target === ui.levels) closeLevels(); });
+
   function renderSettings() {
     ui.swMusic.setAttribute('aria-checked', String(settings.musicOn));
     ui.swSfx.setAttribute('aria-checked', String(settings.sfxOn));
@@ -461,12 +550,12 @@ svg path, svg rect { fill: none; stroke: currentColor; stroke-width: 2.4; stroke
       return { audio: { state: actx ? actx.state : 'none', music: !!musicSrc, loaded: Object.keys(buffers).length,
           played: sndStats.played, errors: sndStats.errors, last: sndStats.last, musicGain: musicGain ? musicGain.gain.value : null,
           sfxGain: sfxGain ? sfxGain.gain.value : null }, settings: settings, hand: ui.hand.classList.contains('hidden') ? null : handPoint(),
-        level: G.index + 1, moves: G.moves, won: G.won, cap: G.cap, boxes: colorState(),
+        progress: progress, level: G.index + 1, moves: G.moves, won: G.won, cap: G.cap, boxes: colorState(),
         rects: layout.boxes.map(function (B) { return { x: B.x, y: B.y, w: B.w, h: B.h }; }) };
     }
   };
 
-  startLevel(0);
+  startLevel(clamp(progress.last, 0, LEVELS.length - 1));
   resize();
   requestAnimationFrame(frame);
 })();
