@@ -90,13 +90,48 @@ async function openPage(browser, fake, unlocked, level) {
     await page.click('#btn-extra'); await page.waitForTimeout(1800);
     check('T1: failed ad -> toast, no box', (await dbg(page)).boxes.length === n1 && await page.isVisible('#toast'), await page.textContent('#toast'));
 
-    // G4: reward that arrives after the level changed is ignored
+    // N2: the level cannot be changed while the ad runs, so the reward is not lost
     await page.evaluate(() => { window.__adMode = 'ok'; window.__rewardAt = 2500; });
+    const n2 = (await dbg(page)).boxes.length;
     await page.click('#btn-extra'); await page.waitForTimeout(200);
-    await page.click('#btn-levels'); await page.click('#levels-grid .lv:nth-child(2)'); await page.waitForTimeout(3000);
+    await page.keyboard.press('l'); await page.waitForTimeout(100);
+    check('N2: L does nothing while the ad runs', await page.isHidden('#levels-modal'));
+    await page.waitForTimeout(3000);
     d = await dbg(page);
-    check('G4: late reward after a level change is ignored', d.level === 2 && d.boxes.length === LEVELS[1].b.length, `boxes ${d.boxes.length}`);
+    check('N2: reward kept on the same level', d.level === 3 && d.boxes.length === n2 + 1, `level ${d.level}, boxes ${n2} -> ${d.boxes.length}`);
     check('rewarded test: no console errors', errs.length === 0, errs.join('|'));
+    await ctx.close();
+  }
+
+  // ---------- N1-N3: the platform never answers showRewarded()
+  {
+    const { ctx, page, errs } = await openPage(browser, true);
+    await solve(page); await page.waitForSelector('#win-modal:not(.hidden)'); await page.click('#btn-next');
+    await page.waitForTimeout(2400);
+    await page.evaluate(() => { bridge.advertisement.showRewarded = function () {}; });
+    const before = JSON.stringify((await dbg(page)).boxes);
+    await page.click('#btn-extra');
+    await page.waitForTimeout(400);
+    const chip = await page.textContent('#hint-chip');
+    check('N3: waiting state is visible (message + dimmed board)', /Loading the ad|Загружаем/.test(chip) && await page.evaluate(() => document.body.classList.contains('ad-wait')), chip);
+    await page.keyboard.press('l'); await page.keyboard.press('s');
+    await page.waitForTimeout(200);
+    check('N2: level window / settings do not open while waiting for the ad',
+      await page.isHidden('#levels-modal') && await page.isHidden('#settings-modal') &&
+      await page.evaluate(() => document.getElementById('btn-levels').disabled && document.getElementById('btn-settings').disabled));
+    await page.waitForTimeout(12200);
+    const toast = (await page.isVisible('#toast')) ? await page.textContent('#toast') : '';
+    let d = await dbg(page);
+    check('N1: no answer in 12 s -> "ad not available", board unlocked', /not available|недоступна/.test(toast) && !d.paused &&
+      await page.evaluate(() => !document.body.classList.contains('ad-wait')), toast);
+    await tap(page, 0); await tap(page, d.boxes.findIndex(b => !b.length), 400);
+    d = await dbg(page);
+    check('N1: taps work again after the timeout', JSON.stringify(d.boxes) !== before && d.moves === 1);
+    await page.keyboard.press('u'); await page.waitForTimeout(300);
+    check('N1: U works again', (await dbg(page)).moves === 0);
+    await page.keyboard.press('l'); await page.waitForTimeout(200);
+    check('N1: level window opens again', await page.isVisible('#levels-modal'));
+    check('silent-ad test: no console errors', errs.length === 0, errs.join('|'));
     await ctx.close();
   }
 
@@ -162,6 +197,32 @@ async function openPage(browser, fake, unlocked, level) {
     await page.focus('#level-info');
     await page.keyboard.press('Enter'); await page.waitForTimeout(200);
     check('G8: level label is focusable, Enter opens the level window', await page.isVisible('#levels-modal'));
+    await ctx.close();
+  }
+
+  // ---------- small boxes: touch zones reach the middle of the gaps and the whole row height
+  {
+    const ctx = await browser.newContext({ viewport: { width: 640, height: 360 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+    const page = await ctx.newPage();
+    await page.goto(URL);
+    await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+    await page.evaluate(() => bridge.storage.set(['os_unlocked', 'os_level'], ['85', '80']));
+    await page.reload(); await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+    await page.click('#btn-play', { force: true }); await page.waitForTimeout(400);
+    let d = await dbg(page);
+    const b1 = d.rects[1], b0 = d.rects[0];
+    const gap = b1.x - (b0.x + b0.w);
+    // just right of the middle of the gap between box 0 and box 1, high above the box
+    await page.touchscreen.tap(b1.x - gap / 2 + 1, b1.y - b1.w * 0.8);
+    await page.waitForTimeout(150);
+    d = await dbg(page);
+    check('touch zone: middle of the gap, above the box -> box 1', d.selected === 1, `box ${b1.w}px, gap ${gap.toFixed(1)}px, selected ${d.selected}`);
+    await page.touchscreen.tap(b1.x + b1.w / 2, b1.y + b1.h / 2); await page.waitForTimeout(100);
+    // just left of the gap middle, below the box bottom -> box 0
+    await page.touchscreen.tap(b0.x + b0.w + gap / 2 - 1, b0.y + b0.h + 3);
+    await page.waitForTimeout(150);
+    d = await dbg(page);
+    check('touch zone: gap middle, just below the box -> box 0', d.selected === 0, `selected ${d.selected}`);
     await ctx.close();
   }
 

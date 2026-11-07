@@ -73,6 +73,8 @@
   var rewardPending = false;
   var rewardToken = null;          // the level attempt the pending rewarded ad belongs to
   var winTimer = 0;
+  var rewardWatch = 0;             // watchdog: the platform may never answer
+  var rewardOpened = false;
   var deadTimer = 0;
   var lastKick = 0, lastDraw = -1;  // idle frame skipping
   var toastTimer = 0;
@@ -719,7 +721,11 @@
     var landscape = window.matchMedia('(min-aspect-ratio: 13/10)').matches;
     garlandSag = clamp(Math.min(W, H) * 0.045, 12, 30);
     garlandY = 2;
-    var chipSpace = clamp(H * 0.045, 26, 36);
+    // the hint / toast line sits between the board and the buttons with a 6 px gap below it
+    var fs = parseFloat(getComputedStyle(ui.chip).fontSize) || 15;
+    var chipH = Math.ceil(fs * 1.3 + 12 + 3);
+    var badgeOut = 4;                   // the undo counter badge sticks out 4 px above its button
+    var chipSpace = chipH + 6 + badgeOut + 4;
     var side = 8;
     if (landscape && hudOn) {
       // the corner buttons sit at the bottom; the board may use the full height between them
@@ -731,8 +737,14 @@
     area.w = W - side * 2;
     area.y = hudOn ? topB + 4 : 0;
     area.h = Math.max(50, botT - chipSpace - area.y);
-    ui.chip.style.top = (botT - chipSpace + 2) + 'px';
-    ui.toast.style.top = (botT - chipSpace + 2) + 'px';
+    area.bottom = area.y + area.h;
+    var chipTop = botT - badgeOut - 6 - chipH;
+    [ui.chip, ui.toast].forEach(function (el) {
+      el.style.top = chipTop + 'px';
+      el.style.height = chipH + 'px';
+      el.style.lineHeight = (chipH - 12 - 3) + 'px';
+      el.style.maxWidth = Math.max(120, area.w) + 'px';
+    });
     renderBackground();
     initSnow();
     if (G) computeLayout();
@@ -800,13 +812,23 @@
     return B.y - layout.d * 0.55;
   }
 
+  // Touch zone of a box: sideways to the middle of the gap, up and down over the whole row
+  // (from the lifted-ornament space down to the next row / the bottom of the board).
   function hitBox(px, py) {
+    var rows = layout.perRow ? layout.perRow.length : 1;
+    var best = -1, bestD = 1e9;
     for (var i = 0; i < layout.boxes.length; i++) {
       var B = layout.boxes[i];
       var mx = B.gap / 2;
-      if (px >= B.x - mx && px <= B.x + B.w + mx && py >= B.y - B.w * 0.95 && py <= B.y + B.h + B.w * 0.1) return i;
+      var rowGap = B.w * 0.12;
+      var top = B.row === 0 ? Math.min(B.y - B.w * 0.95, area.y) : B.y - B.w * 0.95 - rowGap / 2;
+      var bottom = B.row === rows - 1 ? Math.max(B.y + B.h + B.w * 0.1, area.bottom || 0) : B.y + B.h + rowGap / 2;
+      if (px >= B.x - mx && px <= B.x + B.w + mx && py >= top && py <= bottom) {
+        var d = Math.abs(px - (B.x + B.w / 2));
+        if (d < bestD) { bestD = d; best = i; }
+      }
     }
-    return -1;
+    return best;
   }
 
   // ================================================================ level logic
@@ -864,6 +886,8 @@
     var showExtra = rewardedSupported() && !G.extraUsed && !G.won && !G.tutorial;
     ui.btnExtra.classList.toggle('hidden', !showExtra);
     ui.btnExtra.disabled = rewardPending;
+    ui.btnLevels.disabled = rewardPending;
+    ui.btnSettings.disabled = rewardPending;
   }
 
   function select(b) {
@@ -1442,6 +1466,7 @@
     storageSet(['os_settings'], [settingsToString()]);
   }
   function openSettings() {
+    if (rewardPending) return;       // not while a rewarded ad is on its way
     SND.play('button');
     renderSettings();
     ui.settings.classList.remove('hidden');
@@ -1457,23 +1482,44 @@
     if (!rewardedSupported()) return;
     SND.play('button');
     rewardPending = true;          // stays until the ad reports closed / failed
+    rewardOpened = false;
     rewardToken = G;
     G.selected = -1;
+    // no answer at all within 12 s -> give the board back
+    clearTimeout(rewardWatch);
+    rewardWatch = setTimeout(function () { if (!rewardOpened) endRewardWait(true); }, 12000);
     updateHud();
+    setAdWait(true);
     try {
       // Bridge 2.4.1 returns undefined here; the result comes only through the state events
       var r = bridge.advertisement.showRewarded('extra_box');
       if (r && r.catch) r.catch(function () {});
     } catch (e) {
-      rewardPending = false;
-      rewardToken = null;
-      showToast(t('adFail'), 2.5);
-      updateHud();
+      endRewardWait(true);
     }
+  }
+
+  // The rewarded ad is over (or never came): unlock everything.
+  function endRewardWait(failed) {
+    clearTimeout(rewardWatch);
+    var was = rewardPending;
+    rewardPending = false;
+    rewardOpened = false;
+    rewardToken = null;
+    setPause('ad', false);
+    setAdWait(false);
+    if (was && failed) showToast(t('adFail'), 2.5);
+    if (G) updateHud();
+  }
+  function setAdWait(on) {
+    document.body.classList.toggle('ad-wait', !!on);
+    if (on) { hideHand(); hideToast(); setChip(t('adLoading')); }
+    else if (G) { ui.chip.classList.add('hidden'); updateTutorial(); }
   }
 
   // ================================================================ level list
   function openLevels() {
+    if (rewardPending) return;       // changing the level now would lose the reward
     SND.play('button');
     var grid = ui.levelsGrid;
     grid.innerHTML = '';
@@ -1620,17 +1666,20 @@
           else if (s === 'closed' || s === 'failed') setPause('ad', false);
         });
         bridge.advertisement.on(EV.REWARDED_STATE_CHANGED || 'rewarded_state_changed', function (s) {
-          if (s === 'opened') setPause('ad', true);
-          else if (s === 'rewarded') {
+          if (s === 'opened') {
+            setPause('ad', true);
+            if (rewardPending) {
+              rewardOpened = true;
+              // opened but never closed: give up after 3 minutes
+              clearTimeout(rewardWatch);
+              rewardWatch = setTimeout(function () { endRewardWait(false); }, 180000);
+            }
+          } else if (s === 'rewarded') {
             // the only place where the reward is granted; ignore it if the level was won or changed
             if (rewardPending && rewardToken === G && G && !G.won && !G.extraUsed) addExtraBox();
           } else if (s === 'closed' || s === 'failed') {
             setPause('ad', false);
-            if (rewardPending) {
-              rewardPending = false;
-              rewardToken = null;
-              if (s === 'failed') showToast(t('adFail'), 2.5);
-            }
+            if (rewardPending) endRewardWait(s === 'failed');
             if (G) updateHud();
           }
         });
