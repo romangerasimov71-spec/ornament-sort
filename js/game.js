@@ -26,7 +26,7 @@
     { base: '#f2559f', light: '#ffc0de', dark: '#8a1550', pat: 'hearts',  acc: '#ffffff' },
     { base: '#15b5ad', light: '#94f5ef', dark: '#05524f', pat: 'stars',   acc: '#fff4b0' },
     { base: '#cfd8e3', light: '#ffffff', dark: '#6b7a8e', pat: 'diamond', acc: '#3a78d8' },
-    { base: '#97d02a', light: '#e4ff9e', dark: '#3f6608', pat: 'swirl',   acc: '#ffffff' },
+    { base: '#97d02a', light: '#e4ff9e', dark: '#3f6608', pat: 'swirl',   acc: '#2c5a06' },
     { base: '#8e1d3b', light: '#e47a97', dark: '#3d0616', pat: 'band2',   acc: '#ffd36b' },
     { base: '#9a6430', light: '#e8b47c', dark: '#45240a', pat: 'checker', acc: '#fff0d6' }
   ];
@@ -71,6 +71,10 @@
   var snow = [], sparks = [];
   var keyboardMode = false;
   var rewardPending = false;
+  var rewardToken = null;          // the level attempt the pending rewarded ad belongs to
+  var winTimer = 0;
+  var deadTimer = 0;
+  var lastKick = 0, lastDraw = -1;  // idle frame skipping
   var toastTimer = 0;
 
   // ---------------------------------------------------------------- bridge helpers
@@ -164,9 +168,10 @@
         for (i = -2; i <= 2; i++) { c.beginPath(); c.arc(cx + i * r * 0.38, cy + r * 0.05 * (1 - Math.abs(i) * 0.3), r * 0.07, 0, 7); c.fill(); }
         break;
       case 'band2':
-        bandPath(c, cx, cy, r, -r * 0.3, r * 0.06); c.fill();
-        bandPath(c, cx, cy, r, r * 0.3, r * 0.06); c.fill();
-        for (i = -1; i <= 1; i++) { starPath(c, cx + i * r * 0.48, cy + r * 0.04, r * 0.15, r * 0.06, 4, 0); c.fill(); }
+        // one wide gold band with maroon stars: reads differently from the thin 'rings'
+        bandPath(c, cx, cy, r, 0, r * 0.24); c.fill();
+        c.fillStyle = hexA(col.dark, 0.95);
+        for (i = -1; i <= 1; i++) { starPath(c, cx + i * r * 0.5, cy + r * 0.06 * (1 - Math.abs(i) * 0.4), r * 0.2, r * 0.08, 4, 0); c.fill(); }
         break;
       case 'dots':
         for (i = 0; i < 7; i++) {
@@ -235,7 +240,7 @@
         }
         break;
       case 'swirl':
-        c.lineWidth = r * 0.1;
+        c.lineWidth = r * 0.18;
         for (i = 0; i < 3; i++) {
           c.beginPath();
           c.moveTo(cx - r, cy - r * 0.5 + i * r * 0.5);
@@ -514,6 +519,7 @@
     vg.addColorStop(1, 'rgba(0,0,20,.35)');
     c.fillStyle = vg;
     c.fillRect(0, 0, W, H);
+    drawGarlandRope(c);
   }
 
   function drawFir(c, x, y, h, color) {
@@ -550,10 +556,10 @@
     return { pts: pts, swags: swags, seg: seg };
   }
 
-  function drawGarland(c) {
+  // the fir rope does not change: it is drawn once into the background layer
+  function drawGarlandRope(c) {
     var gp = garlandPoints();
     var pts = gp.pts;
-    // fir garland: thick green rope with needle texture
     c.lineCap = 'round';
     c.lineJoin = 'round';
     for (var s = 0; s < gp.swags; s++) {
@@ -567,9 +573,30 @@
       c.strokeStyle = '#2f9a58'; c.lineWidth = 4; c.setLineDash([2, 6]); c.stroke();
       c.setLineDash([]);
     }
-    // bulbs
+  }
+
+  var glowCache = {};
+  function glowSprite(col) {
+    var key = col + DPR;
+    if (glowCache[key]) return glowCache[key];
+    var g = document.createElement('canvas');
+    g.width = g.height = Math.ceil(36 * DPR);
+    var c = g.getContext('2d');
+    c.scale(DPR, DPR);
+    var rg = c.createRadialGradient(18, 18, 0, 18, 18, 18);
+    rg.addColorStop(0, hexA(col, 0.55));
+    rg.addColorStop(1, hexA(col, 0));
+    c.fillStyle = rg;
+    c.fillRect(0, 0, 36, 36);
+    glowCache[key] = g;
+    return g;
+  }
+
+  // the blinking bulbs are drawn every frame
+  function drawGarland(c) {
+    var gp = garlandPoints();
     var spacing = 34, idx = 0;
-    for (s = 0; s < gp.swags; s++) {
+    for (var s = 0; s < gp.swags; s++) {
       var count = Math.max(4, Math.round(gp.seg / spacing));
       for (var k = 1; k < count; k++) {
         var f = k / count;
@@ -577,11 +604,9 @@
         var by = garlandY + Math.sin(f * Math.PI) * garlandSag + 6;
         var col = LIGHT_COLORS[idx % LIGHT_COLORS.length];
         var on = 0.55 + 0.45 * Math.sin(now * 2.4 + idx * 1.7);
-        var glow = c.createRadialGradient(bx, by + 4, 0, bx, by + 4, 18);
-        glow.addColorStop(0, hexA(col, 0.55 * on));
-        glow.addColorStop(1, hexA(col, 0));
-        c.fillStyle = glow;
-        c.fillRect(bx - 18, by - 14, 36, 36);
+        c.globalAlpha = on;
+        c.drawImage(glowSprite(col), bx - 18, by - 14, 36, 36);
+        c.globalAlpha = 1;
         c.fillStyle = '#3c3c3c';
         c.fillRect(bx - 2.5, by - 3, 5, 4);
         c.fillStyle = col;
@@ -589,7 +614,7 @@
         c.beginPath(); c.ellipse(bx, by + 5, 4, 6, 0, 0, Math.PI * 2); c.fill();
         c.globalAlpha = 1;
         c.fillStyle = 'rgba(255,255,255,.7)';
-        c.beginPath(); c.arc(bx - 1.3, by + 3, 1.3, 0, Math.PI * 2); c.fill();
+        c.fillRect(bx - 2, by + 2, 1.6, 1.6);
         idx++;
       }
     }
@@ -681,10 +706,13 @@
   function resize() {
     W = window.innerWidth;
     H = window.innerHeight;
-    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    // keep the canvas backing store at or under ~2.5 megapixels
+    DPR = Math.max(0.75, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(2.5e6 / Math.max(1, W * H))));
     canvas.width = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
     spriteCache = {};
+    glowCache = {};
+    kick();
     var hudOn = !ui.hud.classList.contains('hidden');
     var topB = hudOn ? ui.topbar.getBoundingClientRect().bottom : 0;
     var botT = hudOn ? ui.bottombar.getBoundingClientRect().top : H;
@@ -788,6 +816,9 @@
 
   function startLevel(index) {
     index = clamp(index, 0, LEVELS.length - 1);
+    clearTimeout(winTimer);
+    clearTimeout(deadTimer);
+    clearHighlights();
     var data = LEVELS[index];
     var keepExtra = G && G.index === index && G.extraUsed;
     G = {
@@ -811,8 +842,10 @@
       sparkedAt: [],
       startedAt: now,
       tutorial: index === 0,
-      goalHint: index === 1
+      goalHint: index === 1,
+      deadEnd: false
     };
+    kick();
     if (keepExtra) G.boxes.push([]);
     G.boxes.forEach(function (b, i) { G.shake[i] = -9; G.appear[i] = -9; G.doneAt[i] = -9; });
     computeLayout();
@@ -828,7 +861,7 @@
     ui.movesLabel.textContent = t('moves', { n: G.moves });
     ui.undoCount.textContent = String(G.undoLeft);
     ui.btnUndo.disabled = G.undoLeft <= 0 || !G.history.length || G.won;
-    var showExtra = rewardedSupported() && !G.extraUsed && !G.won;
+    var showExtra = rewardedSupported() && !G.extraUsed && !G.won && !G.tutorial;
     ui.btnExtra.classList.toggle('hidden', !showExtra);
     ui.btnExtra.disabled = rewardPending;
   }
@@ -848,7 +881,8 @@
   }
 
   function tapBox(b) {
-    if (!G || G.won || mode !== 'play' || isPaused()) return;
+    if (!G || G.won || mode !== 'play' || isPaused() || rewardPending) return;
+    kick();
     if (b < 0 || b >= G.boxes.length) return;
     var cs = colorState();
     if (G.selected === -1) {
@@ -859,8 +893,10 @@
       SND.play('drop', 1.1);
     } else if (R.canMove(cs, G.cap, G.selected, b)) {
       doMove(G.selected, b, false);
+    } else if (cs[b].length && !R.isTubeDone(cs[b], G.cap)) {
+      select(b);                       // another box with ornaments: just switch to it
     } else {
-      G.shake[b] = now;
+      G.shake[b] = now;                // a finished box cannot take anything
       SND.play('wrong');
       deselect();
     }
@@ -898,19 +934,50 @@
       G.won = true;
       G.winAt = now + 0.07 * count + 0.75;
       onWin();
-    } else if (!isUndo && !R.usefulMoves(cs, G.cap).length) {
-      showToast(t('stuck'), 4);
     }
+    if (!G.won) scheduleDeadEndCheck();
     updateHud();
   }
 
+  // ---- dead ends: the board can no longer be solved (moves may still exist, they only loop)
+  var DEAD_NODES = 25000;     // keeps the check short on big levels; unknown -> say nothing
+  function scheduleDeadEndCheck() {
+    clearTimeout(deadTimer);
+    if (G.deadEnd) { G.deadEnd = false; hideToast(); clearHighlights(); }
+    var level = G;
+    deadTimer = setTimeout(function () {
+      if (G !== level || G.won) return;
+      var cs = colorState();
+      if (R.solve(cs, G.cap, DEAD_NODES) !== null) return;   // solvable or unknown
+      G.deadEnd = true;
+      // can undo still help? walk back through the moves the player may still undo
+      var undoHelps = false;
+      var st = R.clone(cs);
+      var steps = Math.min(G.undoLeft, G.history.length);
+      for (var k = 1; k <= steps; k++) {
+        var h = G.history[G.history.length - k];
+        for (var j = 0; j < h.count; j++) st[h.from].push(st[h.to].pop());
+        if (R.solve(st, G.cap, DEAD_NODES) !== null) { undoHelps = true; break; }
+      }
+      showToast(t('deadEnd'), 1e9);
+      ui.btnRestart.classList.add('attention');
+      if (undoHelps) ui.btnUndo.classList.add('attention');
+    }, 120);
+  }
+  function clearHighlights() {
+    ui.btnRestart.classList.remove('attention');
+    ui.btnUndo.classList.remove('attention');
+  }
+
   function undo() {
-    if (!G || G.won || mode !== 'play' || isPaused()) return;
+    if (!G || G.won || mode !== 'play' || isPaused() || rewardPending) return;
     if (!G.history.length) return;
     if (G.undoLeft <= 0) { showToast(t('noUndo'), 2); SND.play('wrong'); return; }
     var h = G.history.pop();
     G.undoLeft--;
+    G.moves = Math.max(0, G.moves - 1);
     G.selected = -1;
+    kick();
     doMove(h.to, h.from, h.count);
     hideToast();
     updateHud();
@@ -918,7 +985,7 @@
   }
 
   function restart() {
-    if (!G || mode !== 'play' || isPaused()) return;
+    if (!G || mode !== 'play' || isPaused() || rewardPending) return;
     SND.play('button');
     startLevel(G.index);
   }
@@ -934,11 +1001,14 @@
     SND.play('reward');
     showToast(t('extraGot'), 2);
     ui.toast.style.background = 'rgba(24,120,70,.92)';
+    clearHighlights();
+    G.deadEnd = false;
+    kick();
     updateHud();
   }
 
   function onWin() {
-    var stars = G.moves <= G.par + 2 ? 3 : G.moves <= Math.round(G.par * 1.4) + 4 ? 2 : 1;
+    var stars = G.moves <= Math.round(G.par * 1.2) + 2 ? 3 : G.moves <= Math.round(G.par * 1.6) + 5 ? 2 : 1;
     G.stars = stars;
     var n = G.index + 1;
     save.stars[G.index] = Math.max(save.stars[G.index] || 0, stars);
@@ -957,7 +1027,8 @@
     return out;
   }
 
-  function showWinModal() {
+  function showWinModal(level) {
+    if (!G || G !== level || !G.won) return;   // the level was restarted or changed meanwhile
     var n = G.index + 1;
     ui.winTitle.textContent = t('winTitle');
     ui.winSub.textContent = n >= LEVELS.length ? t('allDone') : t('winSub', { n: n });
@@ -979,7 +1050,7 @@
     // natural pause between levels: let the Bridge decide whether an ad is shown
     bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
     if (G.index + 1 >= LEVELS.length) { startLevel(G.index); openLevels(); return; }
-    startLevel(G.index + 1);
+    startLevel(Math.min(G.index + 1, save.unlocked - 1));   // never past the unlocked levels
   }
 
   function replayLevel() {
@@ -998,6 +1069,20 @@
       var sol = R.solveShortest(colorState(), G.cap, 5000);
       if (!sol || !sol.length) { hideHand(); return; }
       var m = sol[0];
+      if (G.selected >= 0 && G.selected !== m[0]) {
+        // the player picked another box: show where that one can go, or how to put it back
+        var cs = colorState(), best = -1;
+        for (var to = 0; to < cs.length; to++) {
+          if (!R.canMove(cs, G.cap, G.selected, to)) continue;
+          var tmp = R.clone(cs);
+          R.applyMove(tmp, G.cap, G.selected, to);
+          if (R.solveShortest(tmp, G.cap, 5000)) { best = to; break; }
+          if (best < 0) best = to;
+        }
+        if (best >= 0) { pointHand(best, G.boxes[best].length); setChip(t('tut2')); }
+        else { pointHand(G.selected, G.boxes[G.selected].length - 1); setChip(t('tutBack')); }
+        return;
+      }
       if (G.selected === m[0]) { pointHand(m[1], G.boxes[m[1]].length); setChip(t('tut2')); }
       else { pointHand(m[0], G.boxes[m[0]].length - 1); setChip(t(G.history.length ? 'tut3' : 'tut1')); }
       return;
@@ -1119,6 +1204,7 @@
       if (!B) continue;
       var sx = 0;
       var st = now - G.shake[b];
+      if (st < 0.4 || now - G.appear[b] < 0.5) kick();
       if (st < 0.4) sx = Math.sin(st * 45) * w * 0.07 * (1 - st / 0.4);
       var sc = 1;
       var at = now - G.appear[b];
@@ -1163,6 +1249,7 @@
         var o = box[i];
         var target = (G.selected === b && i >= box.length - group) ? 1 : 0;
         o.lift += (target - o.lift) * lerp;
+        if (Math.abs(target - o.lift) > 0.002 || o.fly || now - o.land < 0.5) kick();
         if (o.fly && now >= o.fly.t0 + o.fly.dur) {
           o.fly = null;
           o.land = now;
@@ -1178,6 +1265,7 @@
       if (!(G.doneAt[b] > 0) || now < G.doneAt[b]) continue;
       var B2 = boxes[b];
       var bt = now - G.doneAt[b];
+      if (bt < 0.6) kick();
       if (G.sparkedAt[b] !== G.doneAt[b]) {
         G.sparkedAt[b] = G.doneAt[b];
         burst(B2.x + B2.w / 2, B2.y + B2.w * 0.1, 22, 240, ['#fff6c2', '#ffd34d', '#ffffff', COLORS[G.boxes[b][0].c].light]);
@@ -1188,13 +1276,17 @@
     }
 
     // win: celebrate, then show the result card
+    if (G.won && G.winAt) kick();
+    for (b = 0; b < G.boxes.length; b++) if (G.doneAt[b] > now) kick();
     if (G.won && G.winAt && now >= G.winAt) {
       G.winAt = 0;
       SND.play('win');
       for (b = 0; b < boxes.length; b++) {
         if (G.boxes[b].length) burst(boxes[b].x + boxes[b].w / 2, boxes[b].y + boxes[b].h * 0.4, 14, 300, ['#ffd34d', '#ffffff', '#ff6b7a', '#7dffb0']);
       }
-      setTimeout(showWinModal, 900);
+      var wonLevel = G;
+      clearTimeout(winTimer);
+      winTimer = setTimeout(function () { showWinModal(wonLevel); }, 900);
     }
   }
 
@@ -1237,8 +1329,13 @@
       toastTimer -= dt;
       if (toastTimer <= 0) { hideToast(); updateTutorial(); }
     }
-    drawScene(dt);
+    // nothing is moving: snow and lights are redrawn ~20 times a second instead of 60
+    if (sparks.length) kick();
+    if (now - lastKick > 1 && now - lastDraw < 0.05) return;
+    drawScene(lastDraw < 0 ? dt : Math.min(0.1, now - lastDraw));
+    lastDraw = now;
   }
+  function kick() { lastKick = now; }
 
   // ================================================================ input
   function onPointerDown(e) {
@@ -1256,6 +1353,11 @@
     if (k === 'Escape' || k === 'Esc') return;   // Esc is left to the browser
     SND.unlock();
     var handled = true;
+    var act = document.activeElement;
+    var isActivate = k === 'Enter' || k === ' ' || k === 'Spacebar';
+    if (isActivate && act === ui.levelInfo && mode === 'play') { e.preventDefault(); openLevels(); return; }
+    // a focused button / slider keeps Enter and Space for itself
+    if (isActivate && act && act !== document.body && (act.tagName === 'BUTTON' || act.tagName === 'INPUT')) return;
     if (mode === 'title') {
       if (k === 'Enter' || k === ' ' || k === 'Spacebar') play();
       else handled = false;
@@ -1293,6 +1395,10 @@
         restart();
       } else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') {
         toggleMute();
+      } else if (k === 's' || k === 'S' || k === 'ы' || k === 'Ы') {
+        openSettings();
+      } else if (k === 'l' || k === 'L' || k === 'д' || k === 'Д') {
+        openLevels();
       } else handled = false;
     } else handled = false;
     if (handled) e.preventDefault();
@@ -1350,10 +1456,20 @@
     if (!G || G.extraUsed || rewardPending || G.won) return;
     if (!rewardedSupported()) return;
     SND.play('button');
-    rewardPending = true;
+    rewardPending = true;          // stays until the ad reports closed / failed
+    rewardToken = G;
+    G.selected = -1;
     updateHud();
-    var r = bridgeCall(function (b) { return b.advertisement.showRewarded('extra_box'); });
-    if (!r) { rewardPending = false; updateHud(); }
+    try {
+      // Bridge 2.4.1 returns undefined here; the result comes only through the state events
+      var r = bridge.advertisement.showRewarded('extra_box');
+      if (r && r.catch) r.catch(function () {});
+    } catch (e) {
+      rewardPending = false;
+      rewardToken = null;
+      showToast(t('adFail'), 2.5);
+      updateHud();
+    }
   }
 
   // ================================================================ level list
@@ -1506,12 +1622,13 @@
         bridge.advertisement.on(EV.REWARDED_STATE_CHANGED || 'rewarded_state_changed', function (s) {
           if (s === 'opened') setPause('ad', true);
           else if (s === 'rewarded') {
-            // the only place where the reward is granted
-            if (rewardPending) { rewardPending = false; addExtraBox(); }
+            // the only place where the reward is granted; ignore it if the level was won or changed
+            if (rewardPending && rewardToken === G && G && !G.won && !G.extraUsed) addExtraBox();
           } else if (s === 'closed' || s === 'failed') {
             setPause('ad', false);
             if (rewardPending) {
               rewardPending = false;
+              rewardToken = null;
               if (s === 'failed') showToast(t('adFail'), 2.5);
             }
             if (G) updateHud();

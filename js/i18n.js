@@ -33,7 +33,9 @@
       sfx: 'Sounds',
       musicVol: 'Music volume',
       sfxVol: 'Sound volume',
-      locked: 'locked'
+      locked: 'locked',
+      deadEnd: 'Dead end — undo or restart',
+      tutBack: 'Tap this box again to put it back'
     },
     ru: {
       title: 'Новогодняя сортировка',
@@ -66,7 +68,9 @@
       sfx: 'Звуки',
       musicVol: 'Громкость музыки',
       sfxVol: 'Громкость звуков',
-      locked: 'закрыт'
+      locked: 'закрыт',
+      deadEnd: 'Тупик — отмени ход или начни заново',
+      tutBack: 'Нажми на эту коробку ещё раз, чтобы вернуть шар'
     }
   };
   var lang = 'en';

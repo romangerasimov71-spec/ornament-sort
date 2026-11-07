@@ -11,31 +11,36 @@ const fs = require('fs');
 const path = require('path');
 const R = require('../js/rules.js');
 
-// [count, colors, capacity, empty boxes]
+// Difficulty plan (Roman, 7 Nov 2026: "make the levels hard, growing to the very end").
+// Levels 1-4 are fixed (tutorial + warm-up, approved). From level 5 on, blocks of
+// [count, colors, capacity, empty boxes]. One-empty levels are short "trick" breathers and are
+// never placed next to each other. Every block picks harder shuffles than the one before
+// (higher quantile of the minimum-move count); the finale picks the hardest it finds.
 const SCHEDULE = [
-  [3, 3, 4, 2],
-  [4, 4, 4, 2],
-  [4, 5, 4, 2],
-  [4, 6, 4, 2],
-  [4, 7, 4, 2],
-  [3, 4, 4, 1],
-  [4, 8, 4, 2],
-  [4, 9, 4, 2],
-  [4, 5, 5, 2],
-  [4, 10, 4, 2],
-  [4, 6, 5, 2],
-  [3, 5, 4, 1],
-  [4, 11, 4, 2],
-  [4, 7, 5, 2],
-  [4, 12, 4, 2],
-  [4, 5, 6, 2],
-  [4, 8, 5, 2],
-  [3, 6, 4, 1],
-  [4, 6, 6, 2],
-  [4, 9, 5, 2],
+  [3, 4, 4, 2], [1, 4, 4, 1],
+  [3, 5, 4, 2], [1, 5, 4, 1],
+  [3, 6, 4, 2], [1, 5, 5, 2],
+  [3, 7, 4, 2], [1, 6, 4, 1],
+  [3, 5, 6, 2],
+  [3, 6, 5, 2],
+  [3, 8, 4, 2], [1, 7, 4, 1],
+  [3, 6, 6, 2],
+  [3, 9, 4, 2], [1, 5, 5, 1],
+  [3, 7, 5, 2],
+  [3, 10, 4, 2], [1, 6, 4, 1],
+  [3, 8, 5, 2],
+  [4, 11, 4, 2], [1, 7, 4, 1],
   [4, 7, 6, 2],
-  [4, 12, 4, 2]
+  [4, 9, 5, 2], [1, 6, 5, 1],
+  [3, 12, 4, 2], [1, 8, 4, 1],
+  [3, 7, 6, 2],
+  [3, 9, 5, 2], [1, 6, 5, 1],
+  [3, 12, 4, 2],
+  // finale 76-85: the hardest boards, no breathers
+  [2, 10, 5, 2], [2, 8, 6, 2], [2, 12, 4, 2], [2, 10, 5, 2], [2, 8, 6, 2]
 ];
+const FIXED = 4;          // levels 1-4 stay exactly as approved
+const FINALE_FROM = 76;
 
 // Level 1 is a hand-made tutorial: 3 moves.
 const TUTORIAL = { cap: 4, boxes: [[0, 0, 0, 1], [1, 1, 1, 0], []] };
@@ -84,44 +89,54 @@ function beamSolve(start, cap, width, maxDepth) {
   return null;
 }
 
-function makeLevel(index, colors, cap, empty) {
-  for (let attempt = 0; attempt < 500; attempt++) {
-    const rnd = mulberry32(index * 7919 + attempt * 104729 + 17);
-    const pool = [];
-    for (let c = 0; c < colors; c++) for (let k = 0; k < cap; k++) pool.push(c);
-    for (let i = pool.length - 1; i > 0; i--) {
-      const j = Math.floor(rnd() * (i + 1));
-      [pool[i], pool[j]] = [pool[j], pool[i]];
-    }
-    const boxes = [];
-    for (let b = 0; b < colors; b++) boxes.push(pool.slice(b * cap, b * cap + cap));
-    // No box may start finished, and the start should be well mixed.
-    if (boxes.some((t) => R.isTubeDone(t, cap))) continue;
-    if (boxes.some((t) => R.topGroup(t).count >= cap - 1)) continue;
-    for (let e = 0; e < empty; e++) boxes.push([]);
-    const sol = R.solve(boxes, cap, 400000);
-    if (!sol) continue;
-    const beam = beamSolve(boxes, cap, 600, 400);
-    const par = beam ? Math.min(beam.length, sol.length) : sol.length;
-    if (par < Math.min(colors * 2, 6)) continue; // too easy for its place
-    return { cap, boxes, par, seedAttempt: attempt };
+function candidate(index, attempt, colors, cap, empty) {
+  const rnd = mulberry32(index * 7919 + attempt * 104729 + 17);
+  const pool = [];
+  for (let c = 0; c < colors; c++) for (let k = 0; k < cap; k++) pool.push(c);
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  throw new Error('Could not build level ' + index);
+  const boxes = [];
+  for (let b = 0; b < colors; b++) boxes.push(pool.slice(b * cap, b * cap + cap));
+  // no box may start finished, and the start should be well mixed
+  if (boxes.some((t) => R.isTubeDone(t, cap))) return null;
+  if (boxes.some((t) => R.topGroup(t).count >= cap - 1)) return null;
+  for (let e = 0; e < empty; e++) boxes.push([]);
+  const sol = R.solve(boxes, cap, 400000);
+  if (!sol) return null;
+  const beam = beamSolve(boxes, cap, 600, 400);
+  return { cap, boxes, par: beam ? Math.min(beam.length, sol.length) : sol.length };
+}
+
+// q: 0..1, which candidate to take when sorted by par (1 = the hardest found)
+function makeLevel(index, colors, cap, empty, q, want) {
+  const found = [];
+  for (let attempt = 0; attempt < 3000 && found.length < want; attempt++) {
+    const c = candidate(index, attempt, colors, cap, empty);
+    if (c) found.push(c);
+  }
+  if (!found.length) throw new Error('Could not build level ' + index);
+  found.sort((a, b) => a.par - b.par);
+  return found[Math.min(found.length - 1, Math.round(q * (found.length - 1)))];
 }
 
 function main() {
-  const levels = [];
-  const t = TUTORIAL;
-  const tutSol = R.solveShortest(t.boxes, t.cap);
-  levels.push({ cap: t.cap, boxes: t.boxes, par: tutSol.length });
+  const old = require('../js/levels-data.js');
+  const levels = old.slice(0, FIXED).map((l) => ({ cap: l.c, boxes: l.b, par: l.p }));
+  const total = SCHEDULE.reduce((n, s) => n + s[0], 0) + FIXED;
   for (const [count, colors, cap, empty] of SCHEDULE) {
     for (let i = 0; i < count; i++) {
       const n = levels.length + 1;
-      const lv = makeLevel(n, colors, cap, empty);
+      const progress = (n - FIXED - 1) / (total - FIXED - 1);       // 0 .. 1 over levels 5..85
+      const finale = n >= FINALE_FROM;
+      const q = finale ? 1 : 0.45 + 0.5 * progress;                 // harder shuffles later on
+      const lv = makeLevel(n, colors, cap, empty, q, finale ? 40 : 16);
       levels.push({ cap: lv.cap, boxes: lv.boxes, par: lv.par });
       process.stdout.write(`level ${String(n).padStart(2)}: ${colors} colors, cap ${cap}, ${empty} empty, par ${lv.par}\n`);
     }
   }
+  if (levels.length !== 85) throw new Error('expected 85 levels, got ' + levels.length);
   const body = levels
     .map((l) => '  {c:' + l.cap + ',p:' + l.par + ',b:' + JSON.stringify(l.boxes) + '}')
     .join(',\n');

@@ -40,3 +40,17 @@
 - Клавиша Esc в игре не используется.
 - Перед выкладкой: `node tools/verify-levels.js` и проверка по
   `get_game_checklist` Playgama.
+
+## Сборка к выкладке
+`node tools/build-release.js` — кладёт в `dist/ornament-sort/` только файлы игры
+(index.html, css/, js/, нужные звуки из audio/, playgama-bridge.js,
+playgama-bridge-config.json) и делает архив `dist/ornament-sort.zip`
+(index.html в корне архива). Скрипт сам проверяет: нет localStorage в коде игры,
+нет тестов/документов/прототипа, только латинские имена, все файлы на месте.
+Папка `dist/` в git не попадает. Этот архив и загружается на площадку.
+
+## Уровни
+`node tools/generate-levels.js` пересобирает уровни 5–85 по плану в начале файла
+(уровни 1–4 не трогает). Сложность растёт до самого конца, финал 76–85 — самые
+трудные. После любой правки уровней: `node tools/verify-levels.js` и
+`node tests/play-all.js`.
