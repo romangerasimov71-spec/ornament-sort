@@ -31,7 +31,17 @@ const levels = PICK.map((i) => {
   return { c: lv.c, p: lv.p, b: lv.b };
 });
 
+// Sound: CC0 files from audio/ (see CREDITS.md), embedded as data URIs.
+// The music uses a smaller 40 kbps copy (audio/music-proto.mp3) to keep the file light.
+const SOUNDS = { music: 'music-proto.mp3', pick: 'pick.mp3', drop: 'drop.mp3', wrong: 'wrong.mp3',
+  complete: 'complete.mp3', win: 'win.mp3', button: 'button.mp3' };
+const audio = {};
+for (const k in SOUNDS) {
+  audio[k] = 'data:audio/mpeg;base64,' + fs.readFileSync(path.join(ROOT, 'audio', SOUNDS[k])).toString('base64');
+}
+
 const parts = {
+  '/*AUDIO*/': JSON.stringify(audio),
   '/*LEVELS*/': JSON.stringify(levels),
   '/*RULES*/': fs.readFileSync(path.join(ROOT, 'js/rules.js'), 'utf8'),
   '/*COLORS*/': cut('  // ---------------------------------------------------------------- colors', '  // ---------------------------------------------------------------- state'),

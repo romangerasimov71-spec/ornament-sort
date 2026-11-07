@@ -1,12 +1,12 @@
 # Credits
 
-## Audio (folder `audio/`, used by the full build; the prototype has no sound)
+## Audio (folder `audio/`; the prototype embeds the same files as base64)
 All files were downloaded from OpenGameArt.org and converted/trimmed with ffmpeg to mono mp3.
 Every source is released under **CC0** (public domain), so no attribution is required — it is listed here anyway.
 
 | File | Source | Author | URL | License |
 |---|---|---|---|---|
-| music.mp3 | Wintery loop | Emma_MA | https://opengameart.org/content/wintery-loop | CC0 |
+| music.mp3, music-proto.mp3 (40 kbps copy embedded in the prototype) | Wintery loop | Emma_MA | https://opengameart.org/content/wintery-loop | CC0 |
 | pick.mp3 (click_2), drop.mp3 (click_3), button.mp3 (click_1), wrong.mp3 (dum), reward.mp3 (chimes) | UI Sound Effects (Button Clicks, User Feedback, Notifications) — samples from VCSL / VSCO 2 CE | Robin Lamb | https://opengameart.org/content/ui-sound-effects-button-clicks-user-feedback-notifications | CC0 |
 | complete.mp3 | Pleasing Bell Sound Effect | Spring Spring | https://opengameart.org/content/pleasing-bell-sound-effect | CC0 |
 | win.mp3 (jingles_STEEL02) | 85 Short music jingles | Kenney | https://opengameart.org/content/85-short-music-jingles | CC0 |
