@@ -18,6 +18,11 @@
   — уровни (генерирует `tools/generate-levels.js`, проверяет
   `tools/verify-levels.js` — все уровни должны быть проходимыми).
 - `js/audio.js` — звук, `js/i18n.js` — тексты RU/EN, `css/style.css` — вид.
+- `js/analytics.js` — отметки статистики через Bridge (список событий — `docs/analytics.md`,
+  проверка — `tests/analytics.js`). `GAME_VERSION` в начале `js/game.js` поднимать к каждой
+  новой сборке для площадок.
+- `release/<площадка>/` — пакет к выкладке (Playgama, ВК, ОК, Яндекс); архивы собирает
+  `node tools/build-platform.js`.
 - `audio/` — звуки CC0, список авторов в `CREDITS.md`.
 - `prototype/index.html` — одобренный прототип (5 уровней, один файл).
   Оставлен как образец, не менять и не пересобирать: `tools/build-prototype.js`
