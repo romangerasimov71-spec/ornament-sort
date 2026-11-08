@@ -367,6 +367,79 @@ async function openPage(browser, fake, unlocked, level) {
     }
   }
 
+  // ---------- T2 (round 4): a box of a lower row is already picked (its ornament is lifted). A tap on the lifted
+  // ornament, also on its very top 5-9 px under the bottom of the upper box, belongs to the lower box (puts the
+  // ornament back), never to the upper box or a neighbour. Beside the lifted ornament the upper box keeps its zone.
+  {
+    const LIFT = () => {
+      const c = document.getElementById('scene');
+      const fire = (x, y) => {
+        const o = { clientX: x, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true, pointerId: 1 };
+        c.dispatchEvent(new PointerEvent('pointerdown', o));
+        c.dispatchEvent(new PointerEvent('pointerup', o));
+      };
+      const key = (k) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+      const d0 = OSGame.debug(), R = d0.rects, bad = [];
+      let n = 0, edge = 0;
+      R.forEach((r, i) => {
+        const ups = R.filter(q => q.y < r.y - 1 && q.x < r.x + r.w && q.x + q.w > r.x).sort((a, b) => b.y - a.y);
+        if (!ups.length || !d0.boxes[i].length) return;
+        const up = ups[0], u = R.indexOf(up);
+        const dd = r.w * 0.72, cx = r.x + r.w / 2, upB = up.y + up.h;
+        const pts = [5, 7, 9].map(dy => ['top+' + dy, cx, upB + dy]);
+        const midY = r.y - dd * 0.55;
+        pts.push(['left', cx - dd * 0.4, midY], ['mid', cx, midY], ['right', cx + dd * 0.4, midY]);
+        for (const [tag, x, y] of pts) {
+          fire(cx, r.y + r.h / 2);                       // pick the lower box: its ornament goes up
+          if (OSGame.debug().selected !== i) continue;   // a finished box cannot be picked
+          fire(x, y); n++;
+          const s = OSGame.debug().selected;
+          if (s !== -1) { bad.push(`${tag}@${i}->${s}`); fire(R[s].x + R[s].w / 2, R[s].y + R[s].h / 2); }
+        }
+        // beside the lifted ornament, 3 px under the upper box: still the upper box
+        fire(cx, r.y + r.h / 2);
+        if (OSGame.debug().selected === i) {
+          const m0 = OSGame.debug().moves;
+          fire(r.x + 1, upB + 3); edge++;
+          const d1 = OSGame.debug();
+          if (d1.moves > m0) key('r');                   // the ornament moved to the upper box: start again
+          else if (d1.selected !== u) bad.push(`edge@${i}->${d1.selected}`);
+          const s = OSGame.debug().selected;
+          if (s >= 0) fire(R[s].x + R[s].w / 2, R[s].y + R[s].h / 2);
+        }
+      });
+      return { n, edge, bad, w: R[0].w };
+    };
+    for (const vp of [{ width: 360, height: 640 }, { width: 390, height: 844 }]) {
+      const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      await page.goto(URL);
+      await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+      let total = 0, edges = 0, bad = [];
+      for (let lv = 80; lv <= 85; lv++) {
+        await page.evaluate((l) => bridge.storage.set(['os_unlocked', 'os_level'], ['85', String(l)]), lv);
+        await page.reload(); await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+        await page.click('#btn-play', { force: true }); await page.waitForTimeout(300);
+        if (lv === 80) {
+          // the reported case with real touches: box 6 picked, a touch 5 / 7 / 9 px under the bottom of box 1
+          const rs = (await dbg(page)).rects, r = rs[5], up = rs[0];
+          const got = [];
+          for (const dy of [5, 7, 9]) {
+            await page.touchscreen.tap(r.x + r.w / 2, r.y + r.h / 2); await page.waitForTimeout(250);
+            await page.touchscreen.tap(r.x + r.w / 2, up.y + up.h + dy); await page.waitForTimeout(80);
+            got.push((await dbg(page)).selected);
+          }
+          check(`T2: level 80, ${vp.width}x${vp.height}: box 6 picked, a touch 5 / 7 / 9 px under box 1 puts the ornament back`, got.every(s => s === -1), JSON.stringify(got));
+        }
+        const res = await page.evaluate(LIFT);
+        total += res.n; edges += res.edge; bad = bad.concat(res.bad.map(b => `L${lv}:${b}`));
+      }
+      check(`T2: ${vp.width}x${vp.height}, levels 80-85: a tap on a lifted ornament of the lower row stays with its box; beside it the upper box keeps its zone`,
+        bad.length === 0 && total > 0 && edges > 0, `${total} taps on lifted ornaments, ${edges} beside ${bad.slice(0, 6).join(' ')}`);
+      await ctx.close();
+    }
+  }
+
   // ---------- G3: tutorial hand follows a different selection
   {
     const { ctx, page } = await openPage(browser, false);

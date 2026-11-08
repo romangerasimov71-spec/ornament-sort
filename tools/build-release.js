@@ -29,6 +29,7 @@ const FILES = [
   'js/levels-data.js',
   'js/i18n.js',
   'js/audio.js',
+  'js/analytics.js',
   'js/game.js',
   ...audioFiles
 ];
@@ -42,7 +43,7 @@ for (const f of FILES) {
 
 // ---- checks
 const problems = [];
-const gameCode = ['index.html', 'css/style.css', 'js/rules.js', 'js/levels-data.js', 'js/i18n.js', 'js/audio.js', 'js/game.js'];
+const gameCode = ['index.html', 'css/style.css', 'js/rules.js', 'js/levels-data.js', 'js/i18n.js', 'js/audio.js', 'js/analytics.js', 'js/game.js'];
 for (const f of gameCode) {
   const txt = fs.readFileSync(path.join(GAME_DIR, f), 'utf8');
   if (/localStorage|sessionStorage|indexedDB|document\.cookie/.test(txt)) problems.push(f + ': uses browser storage');

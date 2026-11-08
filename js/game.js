@@ -11,6 +11,7 @@
   var SND = window.OSAudio;
   var t = I18N.t;
 
+  var GAME_VERSION = '1.0.0';      // goes into performance_sample: raise it with every new build for the platforms
   var UNDO_PER_LEVEL = 5;
   var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_settings'];
 
@@ -79,6 +80,39 @@
   var deadTimer = 0;
   var lastKick = 0, lastDraw = -1;  // idle frame skipping
   var toastTimer = 0;
+
+  // ---------------------------------------------------------------- analytics (docs/analytics.md)
+  var AN = window.GameAnalytics || null;
+  var attempts = {};               // attempts per level since the page was opened
+  function track(name, data) { if (AN) AN.event(name, data); }
+  function r1(v) { return Math.round(v * 10) / 10; }
+  function lvData(index, extra) {
+    var d = { level_id: String(index + 1), step_index: index + 1 };
+    if (extra) Object.keys(extra).forEach(function (k) { d[k] = extra[k]; });
+    return d;
+  }
+  // a new attempt of a level: progression_started + the platform's level_started, always together
+  function beginAttempt(index, source) {
+    attempts[index] = (attempts[index] || 0) + 1;
+    var a = Math.min(20, attempts[index]);
+    track('progression_started', lvData(index, { attempt: a, source: source }));
+    sendMessage('level_started', { level: String(index + 1) });
+    return a;
+  }
+  // the player left an unfinished attempt: progression_failed + the platform's level_failed
+  // reason: dead_end (the game showed "Dead end"), otherwise what the player did (restart / level_switch)
+  function failAttempt(level, action) {
+    track('progression_failed', lvData(level.index, {
+      attempt: level.attempt, reason: level.deadEnd ? 'dead_end' : action, action: action,
+      moves: level.moves, duration_sec: r1(now - level.startedAt)
+    }));
+    sendMessage('level_failed', { level: String(level.index + 1) });
+  }
+  // is the player really playing right now (for performance_sample): a level on screen, no pause, no menu
+  function gameplayActive() {
+    return mode === 'play' && !!G && !isPaused() && !rewardPending && ui.win.classList.contains('hidden') &&
+      ui.levels.classList.contains('hidden') && ui.settings.classList.contains('hidden');
+  }
 
   // ---------------------------------------------------------------- bridge helpers
   function bridgeCall(fn) {
@@ -842,7 +876,18 @@
     var share = Math.min(Math.max(10, free * 0.6), free + layout.d * 0.2);
     return bottom + share;
   }
+  // The ornaments lifted out of the selected box (with cap and loop) always belong to that box: the
+  // ~10 px zone under a box of the upper row works only where no lifted ornament is.
+  function hitLifted(px, py) {
+    if (!G || G.selected < 0 || !layout.boxes[G.selected]) return false;
+    var B = layout.boxes[G.selected], d = layout.d;
+    var cx = B.x + B.w / 2;
+    var top = liftTargetY(G.selected) - d * 0.69;            // top of the hanger loop of the lifted ornament
+    // a fingertip is not exact: 5 px above the loop still count as the ornament
+    return Math.abs(px - cx) <= d / 2 + 2 && py >= top - 5 && py < B.y + B.h;
+  }
   function hitBox(px, py) {
+    if (hitLifted(px, py)) return G.selected;
     var rows = layout.perRow ? layout.perRow.length : 1;
     var best = -1, bestD = 1e9;
     for (var i = 0; i < layout.boxes.length; i++) {
@@ -865,8 +910,13 @@
     return G.boxes.map(function (b) { return b.map(function (o) { return o.c; }); });
   }
 
-  function startLevel(index) {
+  // source: continue | next | replay | restart | level_select (docs/analytics.md)
+  function startLevel(index, source) {
     index = clamp(index, 0, LEVELS.length - 1);
+    var prev = G;
+    // "Restart" (or the same level picked again) before a single move: the same attempt goes on
+    var carry = !!(prev && prev.index === index && !prev.won && !prev.played && (source === 'restart' || source === 'level_select'));
+    if (prev && !prev.won && !carry) failAttempt(prev, prev.index === index ? 'restart' : 'level_switch');
     clearTimeout(winTimer);
     clearTimeout(deadTimer);
     clearHighlights();
@@ -891,7 +941,9 @@
       appear: [],
       doneAt: [],
       sparkedAt: [],
-      startedAt: now,
+      startedAt: carry ? prev.startedAt : now,
+      attempt: carry ? prev.attempt : 0,
+      played: false,
       tutorial: index === 0,
       goalHint: index === 1,
       deadEnd: false
@@ -904,7 +956,7 @@
     hideToast();
     updateHud();
     updateTutorial();
-    sendMessage('level_started', { level: String(index + 1) });
+    if (!carry) G.attempt = beginAttempt(index, source || 'continue');
   }
 
   function updateHud() {
@@ -976,6 +1028,7 @@
     if (!isUndo) {
       G.history.push({ from: from, to: to, count: count });
       G.moves++;
+      G.played = true;
     }
     SND.play('drop', 0.95 + Math.random() * 0.1);
     var cs = colorState();
@@ -1041,12 +1094,13 @@
   function restart() {
     if (!G || mode !== 'play' || isPaused() || rewardPending) return;
     SND.play('button');
-    startLevel(G.index);
+    startLevel(G.index, 'restart');
   }
 
   function addExtraBox() {
     if (!G || G.extraUsed) return;
     G.extraUsed = true;
+    track('extra_box_granted', lvData(G.index, { late: !rewardPending }));   // late: after the game stopped waiting
     G.boxes.push([]);
     var k = G.boxes.length - 1;
     G.shake[k] = -9; G.appear[k] = now; G.doneAt[k] = -9;
@@ -1065,11 +1119,18 @@
     var stars = G.moves <= Math.round(G.par * 1.2) + 2 ? 3 : G.moves <= Math.round(G.par * 1.6) + 5 ? 2 : 1;
     G.stars = stars;
     var n = G.index + 1;
+    var firstWin = !(save.stars[G.index] > 0);
+    var dur = r1(now - G.startedAt);
+    track('progression_completed', lvData(G.index, {
+      attempt: G.attempt, stars: stars, moves: G.moves, par: G.par, duration_sec: dur,
+      undo_used: UNDO_PER_LEVEL - G.undoLeft, extra_box: !!G.extraUsed, first_win: firstWin
+    }));
+    if (G.index === 0 && firstWin && AN) AN.once('tutorial_completed', { duration_sec: dur, moves: G.moves });
     save.stars[G.index] = Math.max(save.stars[G.index] || 0, stars);
     save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, n + 1));
     save.level = Math.min(LEVELS.length, n + 1);
     storageSet(['os_level', 'os_unlocked', 'os_stars'], [String(save.level), String(save.unlocked), starsToString()]);
-    sendMessage('level_completed', { level: String(n) });
+    sendMessage('level_completed', { level: String(n) });   // together with progression_completed
     hideHand();
     ui.chip.classList.add('hidden');
   }
@@ -1103,8 +1164,8 @@
     ui.win.classList.add('hidden');
     // natural pause between levels: let the Bridge decide whether an ad is shown
     bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
-    if (G.index + 1 >= LEVELS.length) { startLevel(G.index); openLevels(); return; }
-    startLevel(Math.min(G.index + 1, save.unlocked - 1));   // never past the unlocked levels
+    if (G.index + 1 >= LEVELS.length) { startLevel(G.index, 'replay'); openLevels('final'); return; }
+    startLevel(Math.min(G.index + 1, save.unlocked - 1), 'next');   // never past the unlocked levels
   }
 
   function replayLevel() {
@@ -1112,7 +1173,7 @@
     ui.win.classList.add('hidden');
     bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
     G.extraUsed = false; // a replay is a new attempt
-    startLevel(G.index);
+    startLevel(G.index, 'replay');
   }
 
   // ================================================================ tutorial and hints
@@ -1378,6 +1439,7 @@
   // ================================================================ main loop
   function frame(ts) {
     requestAnimationFrame(frame);
+    if (AN) AN.frame(ts, gameplayActive());
     var tsec = ts / 1000;
     var dt = lastFrame ? Math.min(0.05, tsec - lastFrame) : 0.016;
     lastFrame = tsec;
@@ -1415,7 +1477,7 @@
     var handled = true;
     var act = document.activeElement;
     var isActivate = k === 'Enter' || k === ' ' || k === 'Spacebar';
-    if (isActivate && act === ui.levelInfo && mode === 'play') { e.preventDefault(); openLevels(); return; }
+    if (isActivate && act === ui.levelInfo && mode === 'play') { e.preventDefault(); openLevels('label'); return; }
     // a focused button / slider keeps Enter and Space for itself
     if (isActivate && act && act !== document.body && (act.tagName === 'BUTTON' || act.tagName === 'INPUT')) return;
     if (mode === 'title') {
@@ -1456,9 +1518,9 @@
       } else if (k === 'm' || k === 'M' || k === 'ь' || k === 'Ь') {
         toggleMute();
       } else if (k === 's' || k === 'S' || k === 'ы' || k === 'Ы') {
-        openSettings();
+        openSettings('key');
       } else if (k === 'l' || k === 'L' || k === 'д' || k === 'Д') {
-        openLevels();
+        openLevels('key');
       } else handled = false;
     } else handled = false;
     if (handled) e.preventDefault();
@@ -1469,6 +1531,7 @@
     var on = !(save.settings.musicOn || save.settings.sfxOn);
     save.settings.musicOn = on;
     save.settings.sfxOn = on;
+    track('settings_changed', { setting: 'all', enabled: on, source: 'key' });
     settingsChanged();
     if (on) SND.play('button');
   }
@@ -1501,8 +1564,9 @@
     renderSettings();
     storageSet(['os_settings'], [settingsToString()]);
   }
-  function openSettings() {
+  function openSettings(source) {
     if (rewardPending) return;       // not while a rewarded ad is on its way
+    track('settings_opened', { source: source || 'button' });
     SND.play('button');
     renderSettings();
     ui.settings.classList.remove('hidden');
@@ -1516,6 +1580,7 @@
   function watchAdForBox() {
     if (!G || G.extraUsed || rewardPending || G.won) return;
     if (!rewardedSupported()) return;
+    track('extra_box_requested', lvData(G.index, { dead_end: !!G.deadEnd }));
     SND.play('button');
     rewardPending = true;          // stays until the ad reports closed / failed
     rewardOpened = false;
@@ -1555,8 +1620,10 @@
   }
 
   // ================================================================ level list
-  function openLevels() {
+  // source: button | label | key | final
+  function openLevels(source) {
     if (rewardPending) return;       // changing the level now would lose the reward
+    track('levels_opened', { source: source || 'button', step_index: G ? G.index + 1 : 0 });
     SND.play('button');
     var grid = ui.levelsGrid;
     grid.innerHTML = '';
@@ -1599,7 +1666,8 @@
     SND.play('button');
     // remember the chosen level so a reload resumes on it (one write per explicit choice)
     if (save.level !== i + 1) { save.level = i + 1; storageSet(['os_level'], [String(save.level)]); }
-    startLevel(i);
+    track('level_selected', lvData(i, { from_step_index: G ? G.index + 1 : 0, completed: (save.stars[i] || 0) > 0 }));
+    startLevel(i, 'level_select');
   }
   function closeLevels() {
     SND.play('button');
@@ -1641,7 +1709,7 @@
     mode = 'play';
     ui.title.classList.add('hidden');
     ui.hud.classList.remove('hidden');
-    startLevel(clamp(save.level, 1, save.unlocked) - 1);
+    startLevel(clamp(save.level, 1, save.unlocked) - 1, 'continue');
     resize();
   }
 
@@ -1669,19 +1737,27 @@
     ui.btnPlay.addEventListener('click', play);
     ui.btnUndo.addEventListener('click', function () { SND.unlock(); undo(); });
     ui.btnRestart.addEventListener('click', function () { SND.unlock(); restart(); });
-    ui.btnSettings.addEventListener('click', function () { SND.unlock(); openSettings(); });
-    ui.levelInfo.addEventListener('click', function () { SND.unlock(); if (mode === 'play') openLevels(); });
+    ui.btnSettings.addEventListener('click', function () { SND.unlock(); openSettings('button'); });
+    ui.levelInfo.addEventListener('click', function () { SND.unlock(); if (mode === 'play') openLevels('label'); });
     ui.btnCloseSettings.addEventListener('click', closeSettings);
     ui.settings.addEventListener('pointerdown', function (e) { if (e.target === ui.settings) closeSettings(); });
     ui.levels.addEventListener('pointerdown', function (e) { if (e.target === ui.levels) closeLevels(); });
-    ui.swMusic.addEventListener('click', function () { save.settings.musicOn = !save.settings.musicOn; settingsChanged(); SND.play('button'); });
-    ui.swSfx.addEventListener('click', function () { save.settings.sfxOn = !save.settings.sfxOn; settingsChanged(); SND.play('button'); });
+    ui.swMusic.addEventListener('click', function () {
+      save.settings.musicOn = !save.settings.musicOn;
+      track('settings_changed', { setting: 'music', enabled: save.settings.musicOn, source: 'settings' });
+      settingsChanged(); SND.play('button');
+    });
+    ui.swSfx.addEventListener('click', function () {
+      save.settings.sfxOn = !save.settings.sfxOn;
+      track('settings_changed', { setting: 'sfx', enabled: save.settings.sfxOn, source: 'settings' });
+      settingsChanged(); SND.play('button');
+    });
     // sliders: live volume while dragging, saved once when released
     ui.volMusic.addEventListener('input', function () { save.settings.musicVol = ui.volMusic.value / 100; updateAudio(); });
     ui.volSfx.addEventListener('input', function () { save.settings.sfxVol = ui.volSfx.value / 100; updateAudio(); });
     ui.volMusic.addEventListener('change', settingsChanged);
     ui.volSfx.addEventListener('change', function () { settingsChanged(); SND.play('drop'); });
-    ui.btnLevels.addEventListener('click', function () { SND.unlock(); openLevels(); });
+    ui.btnLevels.addEventListener('click', function () { SND.unlock(); openLevels('button'); });
     ui.btnCloseLevels.addEventListener('click', closeLevels);
     ui.btnExtra.addEventListener('click', function () { SND.unlock(); watchAdForBox(); });
     ui.btnNext.addEventListener('click', nextLevel);
@@ -1731,6 +1807,7 @@
     try { lang = bridge ? bridge.platform.language : 'en'; } catch (e) { lang = 'en'; }
     I18N.setLanguage(lang);
     applyTexts();
+    if (AN) AN.init(bridge, { gameVersion: GAME_VERSION, targetFps: 60 });
 
     if (bridge) {
       try { platformAudio = bridge.platform.isAudioEnabled !== false; } catch (e) { platformAudio = true; }
@@ -1751,6 +1828,7 @@
       requestAnimationFrame(frame);
       ui.boot.classList.add('hidden');
       sendMessage('game_ready');
+      if (AN) AN.ready();
     });
   }
 

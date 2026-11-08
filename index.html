@@ -114,7 +114,7 @@
 <script>
 /* Boot: the Bridge must be initialized before the game loads anything else. */
 (function () {
-  var files = ['js/rules.js', 'js/levels-data.js', 'js/i18n.js', 'js/audio.js', 'js/game.js'];
+  var files = ['js/rules.js', 'js/levels-data.js', 'js/i18n.js', 'js/audio.js', 'js/analytics.js', 'js/game.js'];
   function load(i) {
     if (i >= files.length) { window.OSGame.start(); return; }
     var s = document.createElement('script');
