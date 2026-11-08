@@ -1,2 +1,2 @@
-Built from commit f0f4901dc16f44c26230b6a80e1458fac8dd2f28 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
-5da80577c8046eb7699e911eeef0e0ddcc2a904a1821b1169a880587666ef58d  ornament-sort-yandex.zip  (17 files, 984 KB unpacked, 627 KB zipped)
+Built from commit 132738f2328f171c39726a5ddd4e3284534b26a6 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
+9a405627dbf4f948455e16605a6e020772186397698f0c89c4cd7e098c269d77  ornament-sort-yandex.zip  (18 files, 995 KB unpacked, 631 KB zipped)
