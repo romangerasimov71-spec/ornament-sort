@@ -734,7 +734,8 @@
       var bb = ui.btnUndo.getBoundingClientRect();
       side = bb.right + 8;
       botT = H - Math.max(6, H - bb.bottom);
-      wideBottom = bb.top - badgeOut - 6;      // above the corner buttons the board may use the full width
+      // low landscape screens (phones): above the corner buttons the board may use the full width
+      if (H <= 480) wideBottom = bb.top - badgeOut - 6;
     }
     area.x = side;
     area.w = W - side * 2;
