@@ -71,7 +71,8 @@
   var snow = [], sparks = [];
   var keyboardMode = false;
   var rewardPending = false;
-  var rewardToken = null;          // the level attempt the pending rewarded ad belongs to
+  var rewardToken = null;          // the level attempt the player asked a rewarded ad for (kept after the wait
+                                   // ends: a late "rewarded" for the same attempt still gives the box)
   var winTimer = 0;
   var rewardWatch = 0;             // watchdog: the platform may never answer
   var rewardOpened = false;
@@ -727,17 +728,26 @@
     var badgeOut = 4;                   // the undo counter badge sticks out 4 px above its button
     var chipSpace = chipH + 6 + badgeOut + 4;
     var side = 8;
+    var wideBottom = 0;
     if (landscape && hudOn) {
       // the corner buttons sit at the bottom; the board may use the full height between them
       var bb = ui.btnUndo.getBoundingClientRect();
       side = bb.right + 8;
       botT = H - Math.max(6, H - bb.bottom);
+      wideBottom = bb.top - badgeOut - 6;      // above the corner buttons the board may use the full width
     }
     area.x = side;
     area.w = W - side * 2;
     area.y = hudOn ? topB + 4 : 0;
     area.h = Math.max(50, botT - chipSpace - area.y);
     area.bottom = area.y + area.h;
+    // low landscape screens: a long row of boxes is limited by the width, not the height;
+    // computeLayout() may then use this wider (but a bit lower) area
+    area.wide = null;
+    if (wideBottom > area.y + 50) {
+      var wb = Math.min(area.bottom, wideBottom);
+      area.wide = { x: 8, w: W - 16, y: area.y, h: wb - area.y, bottom: wb };
+    }
     var chipTop = botT - badgeOut - 6 - chipH;
     [ui.chip, ui.toast].forEach(function (el) {
       el.style.top = chipTop + 'px';
@@ -755,16 +765,24 @@
   function computeLayout() {
     var n = G.boxes.length, cap = G.cap;
     var hRatio = 0.46 + 0.77 * cap;
-    var liftR = 0.95, gapR = 0.3, rowGapR = 0.12;
+    var liftR = 0.95, rowGapR = 0.12;
     var best = null;
-    for (var rows = 1; rows <= 4; rows++) {
-      var k = Math.ceil(n / rows);
-      if (rows > 1 && Math.ceil(n / (rows - 1)) === k) continue;
-      var wW = area.w / (k + (k - 1) * gapR);
-      var wH = area.h / (rows * (hRatio + liftR) + (rows - 1) * rowGapR);
-      var w = Math.min(wW, wH, 128, area.w / (k * 1.3 + 0.4));
-      if (!best || w > best.w + 0.5) best = { rows: rows, k: k, w: w };
-    }
+    // the usual area; on low landscape screens also the full width above the corner buttons,
+    // there with the usual or slightly narrower gaps between the boxes
+    [[area, 0.3], [area.wide, 0.3], [area.wide, 0.2]].forEach(function (opt, o) {
+      var A = opt[0], g = opt[1];
+      if (!A) return;
+      for (var rows = 1; rows <= 4; rows++) {
+        var k = Math.ceil(n / rows);
+        if (rows > 1 && Math.ceil(n / (rows - 1)) === k) continue;
+        var wW = A.w / (k + (k - 1) * g);
+        var wH = A.h / (rows * (hRatio + liftR) + (rows - 1) * rowGapR);
+        var w = Math.min(wW, wH, 128, A.w / (k * (1 + g) + 0.4));
+        // the other options only when the boxes really get bigger (by at least 2 px)
+        if (!best || w > best.w + (o ? 2 : 0.5)) best = { rows: rows, k: k, w: w, A: A, g: g };
+      }
+    });
+    var A = best.A, gapR = best.g;
     var w = Math.floor(best.w);
     var bh = w * hRatio;
     var rowsCount = best.rows;
@@ -777,18 +795,18 @@
       left -= c;
     }
     var blockH = rowsCount * (bh + w * liftR) + (rowsCount - 1) * w * rowGapR;
-    var y0 = area.y + (area.h - blockH) / 2;
+    var y0 = A.y + (A.h - blockH) / 2;
     var gap = w * gapR;
     // spread a bit wider when there is room
     var maxRow = Math.max.apply(null, perRow);
-    var free = area.w - (maxRow * w + (maxRow - 1) * gap);
+    var free = A.w - (maxRow * w + (maxRow - 1) * gap);
     if (free > 0) gap = Math.min(gap + free / Math.max(1, maxRow + 1), w * 0.75);
     var boxes = [];
     var idx = 0;
     for (r = 0; r < rowsCount; r++) {
       var cnt = perRow[r];
       var rowW = cnt * w + (cnt - 1) * gap;
-      var x0 = area.x + (area.w - rowW) / 2;
+      var x0 = A.x + (A.w - rowW) / 2;
       var by = y0 + r * (bh + w * liftR + w * rowGapR) + w * liftR;
       for (var i = 0; i < cnt; i++) {
         boxes.push({ x: x0 + i * (w + gap), y: by, w: w, h: bh, row: r, col: i, gap: gap });
@@ -800,6 +818,7 @@
     layout.geom = boxGeom(w, cap);
     layout.d = layout.geom.d;
     layout.perRow = perRow;
+    layout.area = A;
   }
 
   function slotPos(b, i) {
@@ -812,18 +831,27 @@
     return B.y - layout.d * 0.55;
   }
 
-  // Touch zone of a box: sideways to the middle of the gap, up and down over the whole row
-  // (from the lifted-ornament space down to the next row / the bottom of the board).
+  // Touch zone of a box: sideways to the middle of the gap, up and down over the whole row.
+  // Between two rows the border is not in the middle: the first ~10 px under a box (or more of the
+  // free space on big boxes) still belong to it, but the lifted ornament of the lower row stays with
+  // the lower box.
+  function rowSplit(B) {
+    var bottom = B.y + B.h;                                  // bottom of the upper box
+    var free = B.w * (0.95 + 0.12) - layout.d * 1.05;       // up to the top of a lower lifted ornament
+    var share = Math.min(Math.max(10, free * 0.6), free + layout.d * 0.2);
+    return bottom + share;
+  }
   function hitBox(px, py) {
     var rows = layout.perRow ? layout.perRow.length : 1;
     var best = -1, bestD = 1e9;
     for (var i = 0; i < layout.boxes.length; i++) {
       var B = layout.boxes[i];
       var mx = B.gap / 2;
-      var rowGap = B.w * 0.12;
-      var top = B.row === 0 ? Math.min(B.y - B.w * 0.95, area.y) : B.y - B.w * 0.95 - rowGap / 2;
-      var bottom = B.row === rows - 1 ? Math.max(B.y + B.h + B.w * 0.1, area.bottom || 0) : B.y + B.h + rowGap / 2;
-      if (px >= B.x - mx && px <= B.x + B.w + mx && py >= top && py <= bottom) {
+      var rowPitch = B.h + B.w * (0.95 + 0.12);
+      var A = layout.area || area;
+      var top = B.row === 0 ? Math.min(B.y - B.w * 0.95, A.y) : rowSplit({ y: B.y - rowPitch, h: B.h, w: B.w });
+      var bottom = B.row === rows - 1 ? Math.max(B.y + B.h + Math.max(10, B.w * 0.1), A.bottom || 0) : rowSplit(B);
+      if (px >= B.x - mx && px <= B.x + B.w + mx && py >= top && py < bottom) {
         var d = Math.abs(px - (B.x + B.w / 2));
         if (d < bestD) { bestD = d; best = i; }
       }
@@ -882,7 +910,8 @@
     ui.levelLabel.textContent = t('level', { n: G.index + 1 });
     ui.movesLabel.textContent = t('moves', { n: G.moves });
     ui.undoCount.textContent = String(G.undoLeft);
-    ui.btnUndo.disabled = G.undoLeft <= 0 || !G.history.length || G.won;
+    ui.btnUndo.disabled = G.undoLeft <= 0 || !G.history.length || G.won || rewardPending;
+    ui.btnRestart.disabled = rewardPending;
     var showExtra = rewardedSupported() && !G.extraUsed && !G.won && !G.tutorial;
     ui.btnExtra.classList.toggle('hidden', !showExtra);
     ui.btnExtra.disabled = rewardPending;
@@ -1156,6 +1185,12 @@
     toastTimer = 0;
     ui.toast.classList.add('hidden');
   }
+  // the board is still in a dead end: bring the "Dead end" line back (after another message or an ad)
+  function restoreDeadEnd() {
+    if (!G || !G.deadEnd || G.won || mode !== 'play' || rewardPending) return;
+    if (toastTimer > 0 && !ui.toast.classList.contains('hidden')) return;   // another message is still up
+    showToast(t('deadEnd'), 1e9);
+  }
 
   // ================================================================ rendering
   function ornamentPos(o, b, i) {
@@ -1351,7 +1386,7 @@
     updateSparks(dt);
     if (toastTimer > 0) {
       toastTimer -= dt;
-      if (toastTimer <= 0) { hideToast(); updateTutorial(); }
+      if (toastTimer <= 0) { hideToast(); updateTutorial(); restoreDeadEnd(); }
     }
     // nothing is moving: snow and lights are redrawn ~20 times a second instead of 60
     if (sparks.length) kick();
@@ -1500,16 +1535,17 @@
   }
 
   // The rewarded ad is over (or never came): unlock everything.
+  // rewardToken stays: the platform may still show the ad and report "rewarded" later.
   function endRewardWait(failed) {
     clearTimeout(rewardWatch);
     var was = rewardPending;
     rewardPending = false;
     rewardOpened = false;
-    rewardToken = null;
     setPause('ad', false);
     setAdWait(false);
-    if (was && failed) showToast(t('adFail'), 2.5);
     if (G) updateHud();
+    if (was && failed) showToast(t('adFail'), 2.5);   // the dead-end line comes back after it
+    else restoreDeadEnd();                             // closed without a reward
   }
   function setAdWait(on) {
     document.body.classList.toggle('ad-wait', !!on);
@@ -1675,8 +1711,9 @@
               rewardWatch = setTimeout(function () { endRewardWait(false); }, 180000);
             }
           } else if (s === 'rewarded') {
-            // the only place where the reward is granted; ignore it if the level was won or changed
-            if (rewardPending && rewardToken === G && G && !G.won && !G.extraUsed) addExtraBox();
+            // the only place where the reward is granted: only for the same attempt of the same level,
+            // not won yet, and at most one extra box per level (a late answer after the 12 s wait counts too)
+            if (rewardToken && rewardToken === G && !G.won && !G.extraUsed) addExtraBox();
           } else if (s === 'closed' || s === 'failed') {
             setPause('ad', false);
             if (rewardPending) endRewardWait(s === 'failed');

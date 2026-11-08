@@ -226,6 +226,147 @@ async function openPage(browser, fake, unlocked, level) {
     await ctx.close();
   }
 
+  // ---------- review round 3: R1 dead-end line after an ad without a reward, R3 Undo / Restart off while waiting
+  {
+    const deadOn = async (page) => (await page.isVisible('#toast')) && /Dead end|Тупик/.test(await page.textContent('#toast'));
+    // level 13: moves 1->7 and 1->8 lead to a dead end (from the game reviewer); fall back to the solver
+    let seq = [[0, 6], [0, 7]];
+    { const s = R.clone(LEVELS[12].b); let ok = true;
+      for (const [a, b] of seq) ok = ok && R.applyMove(s, LEVELS[12].c, a, b);
+      if (!ok || R.solve(s, LEVELS[12].c, 50000) !== null) seq = findDeadEnd(LEVELS[12]); }
+    for (const mode of ['fail', 'cancel']) {
+      const { ctx, page, errs } = await openPage(browser, true, 13, 13);
+      await page.evaluate((m) => { window.__adMode = m; window.__rewardAt = 600; }, mode);
+      for (const [a, b] of seq) { await tap(page, a); await tap(page, b, 250); }
+      await page.waitForTimeout(500);
+      check(`R1 (${mode}): dead end shown before the ad`, await deadOn(page));
+      await page.click('#btn-extra'); await page.waitForTimeout(300);
+      const dis = await page.evaluate(() => ['btn-undo', 'btn-restart', 'btn-levels', 'btn-settings'].map(id => document.getElementById(id).disabled));
+      check(`R3 (${mode}): Undo, Restart, Levels, Settings are all off while waiting for the ad`, dis.every(Boolean), JSON.stringify(dis));
+      const m0 = (await dbg(page)).moves;
+      await page.click('#btn-undo', { force: true }).catch(() => {}); await page.click('#btn-restart', { force: true }).catch(() => {});
+      await page.waitForTimeout(150);
+      check(`R3 (${mode}): Undo / Restart clicks do nothing while waiting`, (await dbg(page)).moves === m0);
+      await page.waitForTimeout(mode === 'fail' ? 3400 : 1000);   // ad over (+ the 2.5 s "not available" message)
+      const d = await dbg(page);
+      check(`R1 (${mode}): the dead-end line is back after the ad without a reward`, await deadOn(page) && d.boxes.length === LEVELS[12].b.length,
+        (await page.isVisible('#toast')) ? await page.textContent('#toast') : 'no message');
+      const on = await page.evaluate(() => ['btn-undo', 'btn-restart'].map(id => !document.getElementById(id).disabled));
+      check(`R3 (${mode}): Undo / Restart work again after the ad`, on.every(Boolean), JSON.stringify(on));
+      check(`R1 (${mode}): no console errors`, errs.length === 0, errs.join('|'));
+      await ctx.close();
+    }
+  }
+
+  // ---------- R2: the ad opens after the 12 s wait and is watched to the end -> the box is still given, once
+  {
+    const prep = async (page) => page.evaluate(() => {
+      const a = bridge.advertisement, E = bridge.EVENT_NAME.REWARDED_STATE_CHANGED;
+      window.__fire = (st) => a.emit(E, st);
+      a.showRewarded = function () { window.__calls = (window.__calls || 0) + 1; };   // the platform is silent for now
+    });
+    {
+      const { ctx, page, errs } = await openPage(browser, true, 13, 13);
+      await prep(page);
+      const n0 = (await dbg(page)).boxes.length;
+      await page.click('#btn-extra'); await page.waitForTimeout(12400);
+      check('R2: the 12 s wait is over, board unlocked, no box yet', !(await page.evaluate(() => document.body.classList.contains('ad-wait'))) && (await dbg(page)).boxes.length === n0);
+      await page.evaluate(() => { __fire('loading'); __fire('opened'); }); await page.waitForTimeout(100);
+      check('R2: the late ad pauses the game', (await dbg(page)).paused);
+      await page.evaluate(() => { __fire('rewarded'); __fire('closed'); }); await page.waitForTimeout(200);
+      let d = await dbg(page);
+      check('R2: late "rewarded" for the same attempt -> +1 box', d.boxes.length === n0 + 1 && !d.paused, `${n0} -> ${d.boxes.length}`);
+      await page.evaluate(() => { __fire('opened'); __fire('rewarded'); __fire('closed'); }); await page.waitForTimeout(200);
+      d = await dbg(page);
+      check('R2: a second "rewarded" does not give a second box', d.boxes.length === n0 + 1, `${d.boxes.length}`);
+      check('R2: no console errors', errs.length === 0, errs.join('|'));
+      await ctx.close();
+    }
+    {
+      // the player restarted the level before the late ad -> no box (another attempt)
+      const { ctx, page } = await openPage(browser, true, 13, 13);
+      await prep(page);
+      const n0 = (await dbg(page)).boxes.length;
+      await page.click('#btn-extra'); await page.waitForTimeout(12400);
+      await page.click('#btn-restart'); await page.waitForTimeout(300);
+      await page.evaluate(() => { __fire('opened'); __fire('rewarded'); __fire('closed'); }); await page.waitForTimeout(200);
+      check('R2: late "rewarded" after a restart -> no box', (await dbg(page)).boxes.length === n0);
+      // and after a won level -> nothing either
+      await page.click('#btn-extra'); await page.waitForTimeout(12400);
+      await solve(page); await page.waitForTimeout(300);
+      await page.evaluate(() => { __fire('opened'); __fire('rewarded'); __fire('closed'); }); await page.waitForTimeout(200);
+      const d = await dbg(page);
+      check('R2: late "rewarded" after the level is won -> no box', d.won && d.boxes.length === n0, `won ${d.won}, boxes ${d.boxes.length}`);
+      await ctx.close();
+    }
+  }
+
+  // ---------- T1: touch zones on the late levels (80-85) at 360x640 and 640x360: centre, edges, gaps, above,
+  // just below; between two rows the first ~10 px under a box belong to it, a lifted ornament of the lower row
+  // still belongs to the lower box. No tap may pick a neighbouring box.
+  {
+    const MATRIX = () => {
+      const c = document.getElementById('scene');
+      const fire = (x, y) => {
+        const o = { clientX: x, clientY: y, bubbles: true, pointerType: 'touch', isPrimary: true, pointerId: 1 };
+        c.dispatchEvent(new PointerEvent('pointerdown', o));
+        c.dispatchEvent(new PointerEvent('pointerup', o));
+      };
+      const d0 = OSGame.debug(), R = d0.rects, bad = [];
+      let n = 0;
+      R.forEach((r, i) => {
+        const same = R.filter(q => Math.abs(q.y - r.y) < 1);
+        const nxt = same.find(q => q.x > r.x + 1), prv = same.slice().reverse().find(q => q.x < r.x - 1);
+        const gR = nxt ? nxt.x - (r.x + r.w) : 0, gL = prv ? r.x - (prv.x + prv.w) : 0;
+        const pts = [['center', r.x + r.w / 2, r.y + r.h / 2], ['leftEdge', r.x + 1, r.y + r.h / 2], ['rightEdge', r.x + r.w - 1, r.y + r.h / 2],
+          ['topEdge', r.x + r.w / 2, r.y + 2], ['bottomEdge', r.x + r.w / 2, r.y + r.h - 2],
+          ['liftedOrnament', r.x + r.w / 2, r.y - r.w * 0.396], ['aboveLift', r.x + r.w / 2, r.y - r.w * 0.6], ['liftTop', r.x + r.w / 2, r.y - r.w * 0.7],
+          ['below3', r.x + r.w / 2, r.y + r.h + 3], ['below8', r.x + r.w / 2, r.y + r.h + 8],
+          ['below3left', r.x + 2, r.y + r.h + 3], ['below8right', r.x + r.w - 2, r.y + r.h + 8]];
+        if (gR) pts.push(['gapRight', r.x + r.w + gR * 0.45, r.y + r.h / 2], ['gapRightLow', r.x + r.w + gR * 0.45, r.y + r.h + 5]);
+        if (gL) pts.push(['gapLeft', r.x - gL * 0.45, r.y + r.h / 2], ['gapLeftHigh', r.x - gL * 0.45, r.y - r.w * 0.4]);
+        for (const [tag, x, y] of pts) {
+          const empty = !d0.boxes[i].length;
+          fire(x, y); n++;
+          const s = OSGame.debug().selected;
+          if (empty ? s !== -1 : s !== i) bad.push(`${tag}@${i}->${s}`);
+          const sel = OSGame.debug().selected;
+          if (sel >= 0) { const q = R[sel]; fire(q.x + q.w / 2, q.y + q.h / 2); }   // put it back
+        }
+      });
+      return { n, bad, w: R[0].w };
+    };
+    for (const vp of [{ width: 360, height: 640 }, { width: 640, height: 360 }]) {
+      const ctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1, hasTouch: true, isMobile: true });
+      const page = await ctx.newPage();
+      await page.goto(URL);
+      await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+      const lines = [];
+      let total = 0, bad = [];
+      for (let lv = 80; lv <= 85; lv++) {
+        await page.evaluate((l) => bridge.storage.set(['os_unlocked', 'os_level'], ['85', String(l)]), lv);
+        await page.reload(); await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+        await page.click('#btn-play', { force: true }); await page.waitForTimeout(300);
+        if (lv === 82 && vp.width === 360) {
+          // the reported case with real touches: 3 and 8 px under the bottom of box 1 (top row)
+          const r = (await dbg(page)).rects[0];
+          const got = [];
+          for (const dy of [3, 8]) {
+            await page.touchscreen.tap(r.x + r.w / 2, r.y + r.h + dy); await page.waitForTimeout(80);
+            got.push((await dbg(page)).selected);
+            await page.touchscreen.tap(r.x + r.w / 2, r.y + r.h / 2); await page.waitForTimeout(80);
+          }
+          check('T1: level 82, 360x640: a touch 3 / 8 px under box 1 picks box 1', got.every(s => s === 0), JSON.stringify(got));
+        }
+        const res = await page.evaluate(MATRIX);
+        total += res.n; bad = bad.concat(res.bad.map(b => `L${lv}:${b}`));
+        lines.push(`L${lv} ${res.w}px`);
+      }
+      check(`T1: ${vp.width}x${vp.height}, levels 80-85: every tap picks its own box`, bad.length === 0, `${total} taps (${lines.join(', ')}) ${bad.slice(0, 6).join(' ')}`);
+      await ctx.close();
+    }
+  }
+
   // ---------- G3: tutorial hand follows a different selection
   {
     const { ctx, page } = await openPage(browser, false);

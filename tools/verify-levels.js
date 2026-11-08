@@ -104,6 +104,13 @@ LEVELS.forEach((lv, i) => {
   if (errs.length) { failed++; console.log(line + '  FAIL: ' + errs.join('; ')); }
   else console.log(line + '  OK');
 });
+// levels 50+: neighbouring levels never share a box set (colors x capacity, empty boxes)
+if (!process.argv[2]) {
+  const set = (l) => new Set(l.b.flat()).size + 'x' + l.c + '+' + l.b.filter((t) => !t.length).length;
+  for (let n = 51; n <= LEVELS.length; n++) {
+    if (set(LEVELS[n - 2]) === set(LEVELS[n - 1])) { failed++; console.log(`levels ${n - 1} and ${n}: same box set ${set(LEVELS[n - 1])}  FAIL`); }
+  }
+}
 console.log(`\n${LEVELS.length} levels checked in ${((Date.now() - t0) / 1000).toFixed(1)} s: ` +
   (failed ? `${failed} FAILED` : 'all solvable'));
 process.exit(failed ? 1 : 0);

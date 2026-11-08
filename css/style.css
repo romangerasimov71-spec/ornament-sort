@@ -423,6 +423,8 @@ svg .fill { fill: currentColor; }
 /* dead end: the buttons that can help */
 .icon-btn.attention { animation: attention 1s ease-in-out infinite; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .5), 0 0 0 4px #ffd36b, 0 0 18px 4px rgba(255, 200, 80, .8); }
 @keyframes attention { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+/* while a rewarded ad is on its way the buttons are off: no blinking */
+.icon-btn.attention:disabled { animation: none; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .28), 0 3px 0 rgba(4, 10, 26, .55), 0 6px 14px rgba(0, 0, 0, .3); }
 #level-info:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; border-radius: 10px; }
 
 /* waiting for a rewarded ad: the board is dimmed and does not react */
