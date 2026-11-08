@@ -13,6 +13,7 @@
  *
  * What the ads do is set from the test: window.__adsKit.mode = { rewarded: ..., interstitial: ... }
  *   rewarded:     'ok' (watched to the end) | 'cancel' (closed early, no reward) | 'fail' (failed)
+ *                 | 'double' (watched, "rewarded" comes twice inside the same show)
  *                 | 'silent' (never answers) | 'late' (answers only when the test calls playPending())
  *   interstitial: 'ok' | 'fail' | 'silent'
  * Timings (ms after the show call): window.__adsKit.timing.
@@ -59,13 +60,15 @@
   }
   function later(ms, fn) { setTimeout(fn, ms); }
 
-  // one rewarded ad, from loading to the end; how = 'ok' | 'cancel' | 'fail'
+  // one rewarded ad, from loading to the end; how = 'ok' | 'cancel' | 'fail' | 'double'
   function playRewarded(how) {
     var T = kit.timing;
     later(T.loading, function () { sendRewarded('loading'); });
     if (how === 'fail') { later(T.fail, function () { sendRewarded('failed'); }); return; }
     later(T.opened, function () { sendRewarded('opened'); });
-    if (how === 'ok') later(T.opened + T.watch, function () { sendRewarded('rewarded'); });
+    if (how === 'ok' || how === 'double') later(T.opened + T.watch, function () { sendRewarded('rewarded'); });
+    // 'double': the platform reports "rewarded" twice inside one show (seen on some platforms)
+    if (how === 'double') later(T.opened + T.watch + 50, function () { sendRewarded('rewarded'); });
     later(T.opened + T.watch + 100, function () { sendRewarded('closed'); });
   }
   function playInterstitial(how) {

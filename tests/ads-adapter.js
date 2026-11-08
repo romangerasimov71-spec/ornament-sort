@@ -9,6 +9,13 @@ async function tapBox(page, i, wait = 50) {
   await page.waitForTimeout(wait);
 }
 
+async function solveLevel(page) {
+  const d = await dbg(page);
+  const sol = R.solveShortest(d.boxes, d.cap, 300000) || R.solve(d.boxes, d.cap);
+  for (const [a, b] of sol) { await tapBox(page, a, 40); await tapBox(page, b, 40); }
+  await page.waitForSelector('#win-modal:not(.hidden)', { timeout: 10000 });
+}
+
 module.exports = {
   name: 'Ornament Sort',
   viewport: { width: 390, height: 844 },
@@ -27,15 +34,25 @@ module.exports = {
 
   async clickRewarded(page) { await page.click('#btn-extra'); },
 
-  // the reward is one extra empty box
-  async rewardCount(page) { const d = await dbg(page); return d.boxes.length - (d.level === 13 ? 8 : d.boxes.length); },
+  // the reward is one extra empty box: boxes on the board now minus the boxes of the level itself
+  // (works on any level, so "an interstitial gives no reward" is really checked on the next level too)
+  async rewardCount(page) {
+    return page.evaluate(() => { const d = OSGame.debug(); return d.boxes.length - window.OS_LEVELS[d.level - 1].b.length; });
+  },
 
   async triggerInterstitial(page) {
-    const d = await dbg(page);
-    const sol = R.solveShortest(d.boxes, d.cap, 300000) || R.solve(d.boxes, d.cap);
-    for (const [a, b] of sol) { await tapBox(page, a, 40); await tapBox(page, b, 40); }
-    await page.waitForSelector('#win-modal:not(.hidden)', { timeout: 10000 });
+    await solveLevel(page);
     await page.click('#btn-next');                         // the natural pause between levels
+  },
+
+  // late-* cases: the player leaves the attempt while the ad is late
+  async restartLevel(page) { await page.click('#btn-restart'); await page.waitForTimeout(200); },
+  async winLevel(page) { await solveLevel(page); },
+  async switchLevel(page) {
+    const d = await dbg(page);
+    await page.click('#btn-levels');
+    await page.click(`#levels-grid [data-level="${d.level - 2}"]`);   // the level before this one
+    await page.waitForTimeout(200);
   },
 
   async isPaused(page) { return (await dbg(page)).paused; },
