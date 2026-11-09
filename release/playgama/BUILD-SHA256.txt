@@ -1,2 +1,2 @@
-Built from commit 132738f2328f171c39726a5ddd4e3284534b26a6 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
-9a405627dbf4f948455e16605a6e020772186397698f0c89c4cd7e098c269d77  ornament-sort-playgama.zip  (18 files, 995 KB unpacked, 631 KB zipped)
+Built from commit 0314ac76f7d0fe402e580af5a8aa007e45e3d674 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
+80d5c0cd60c05efa2ef33bbdea22e8e3e916941a0ff97202b7d7b92545997443  ornament-sort-playgama.zip  (18 files, 996 KB unpacked, 631 KB zipped)
