@@ -252,7 +252,7 @@ async function solveAndPlay(page, how) {
   check('platform audio event mutes', okAudio === true, String(okAudio));
 
   // ---- rewarded ad (stubbed; the mock platform does not support it)
-  await page.evaluate(() => {
+  const stubRewarded = () => page.evaluate(() => {
     Object.defineProperty(bridge.advertisement, 'isRewardedSupported', { configurable: true, get: () => true });
     window.__rewardMode = 'cancel';
     bridge.advertisement.showRewarded = () => {
@@ -262,9 +262,25 @@ async function solveAndPlay(page, how) {
       return Promise.resolve();
     };
   });
+  await stubRewarded();
   await page.click('#btn-restart');
   await page.waitForTimeout(200);
-  check('ad button visible when rewarded is supported', await page.isVisible('#btn-extra'), await page.textContent('#btn-extra'));
+  check('decision 8: no "+1 box" on level 2 even with rewarded ads', (await page.evaluate(() => OSGame.debug())).level === 2 && !(await page.isVisible('#btn-extra')));
+  // "+1 box" starts at level 8: saved progress 8 unlocked, last level 7
+  await page.evaluate(() => bridge.storage.set(['os_unlocked', 'os_level'], ['8', '7']));
+  await page.reload();
+  await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
+  await page.click('#btn-play', { force: true });
+  await page.waitForTimeout(300);
+  await stubRewarded();
+  await page.click('#btn-restart');
+  await page.waitForTimeout(200);
+  check('decision 8: no "+1 box" on level 7', (await page.evaluate(() => OSGame.debug())).level === 7 && !(await page.isVisible('#btn-extra')));
+  await page.click('#btn-levels');
+  await page.waitForTimeout(200);
+  await page.click('#levels-grid .lv:nth-child(8)');
+  await page.waitForTimeout(300);
+  check('ad button visible on level 8 when rewarded is supported', (await page.evaluate(() => OSGame.debug())).level === 8 && await page.isVisible('#btn-extra'), await page.textContent('#btn-extra'));
   let nb = (await page.evaluate(() => OSGame.debug())).boxes.length;
   await page.click('#btn-extra');
   await page.waitForTimeout(100);

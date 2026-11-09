@@ -21,7 +21,7 @@ module.exports = {
   viewport: { width: 390, height: 844 },
   rewardTimeoutMs: 12000,            // the game gives up waiting for a silent ad after 12 s
 
-  // rewarded cases: level 13 ("+1 box" is there); interstitial cases: level 2, solved, then "Next"
+  // rewarded cases: level 13 ("+1 box" is there only from level 8, decision 8); interstitial cases: level 2, solved, then "Next"
   async prepare(page, { kind }) {
     await page.waitForFunction(() => window.OSGame && OSGame.debug().mode === 'title');
     const lv = kind === 'rewarded' ? 13 : 2;

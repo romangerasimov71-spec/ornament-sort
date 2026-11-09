@@ -13,6 +13,7 @@
 
   var GAME_VERSION = '1.0.0';      // goes into performance_sample: raise it with every new build for the platforms
   var UNDO_PER_LEVEL = 5;
+  var EXTRA_BOX_FROM_LEVEL = 8;    // "+1 box for an ad" only from this level on: on levels 1-7 a dead end is impossible
   var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_settings'];
 
   // ---------------------------------------------------------------- colors
@@ -124,6 +125,10 @@
   }
   function storageSet(keys, values) {
     bridgeCall(function (b) { return b.storage.set(keys, values); });
+  }
+  // levels are numbered from 1 for the player, G.index from 0
+  function extraBoxAllowed() {
+    return !!G && G.index + 1 >= EXTRA_BOX_FROM_LEVEL;
   }
   function rewardedSupported() {
     return !!(bridge && bridge.advertisement && bridge.advertisement.isRewardedSupported);
@@ -965,7 +970,7 @@
     ui.undoCount.textContent = String(G.undoLeft);
     ui.btnUndo.disabled = G.undoLeft <= 0 || !G.history.length || G.won || rewardPending;
     ui.btnRestart.disabled = rewardPending;
-    var showExtra = rewardedSupported() && !G.extraUsed && !G.won && !G.tutorial;
+    var showExtra = rewardedSupported() && extraBoxAllowed() && !G.extraUsed && !G.won;
     ui.btnExtra.classList.toggle('hidden', !showExtra);
     ui.btnExtra.disabled = rewardPending;
     ui.btnLevels.disabled = rewardPending;
@@ -1098,7 +1103,7 @@
   }
 
   function addExtraBox() {
-    if (!G || G.extraUsed) return;
+    if (!G || G.extraUsed || !extraBoxAllowed()) return;
     G.extraUsed = true;
     track('extra_box_granted', lvData(G.index, { late: !rewardPending }));   // late: after the game stopped waiting
     G.boxes.push([]);
@@ -1579,7 +1584,7 @@
 
   function watchAdForBox() {
     if (!G || G.extraUsed || rewardPending || G.won) return;
-    if (!rewardedSupported()) return;
+    if (!rewardedSupported() || !extraBoxAllowed()) return;
     track('extra_box_requested', lvData(G.index, { dead_end: !!G.deadEnd }));
     SND.play('button');
     rewardPending = true;          // stays until the ad reports closed / failed

@@ -1,4 +1,4 @@
-// Regression tests for review round 1 (T1, G1-G8). Uses tests/fakeads.js, which behaves like a
+// Regression tests for review round 1 (T1, G1-G8) and decision 8 ("+1 box" from level 8). Uses tests/fakeads.js, which behaves like a
 // real ad-supporting platform (showRewarded() returns undefined, states arrive later).
 const { chromium } = require('playwright');
 const fs = require('fs');
@@ -58,14 +58,40 @@ async function openPage(browser, fake, unlocked, level) {
 (async () => {
   const browser = await chromium.launch();
 
-  // ---------- T1 / G4 / G5: rewarded ad with a realistic platform
+  // ---------- G5 / decision 8: "+1 box" only from level 8 (on levels 1-7 a dead end is impossible).
+  // A fresh player goes through levels 1-7 with the solver: no button there, it appears on level 8.
   {
     const { ctx, page, errs } = await openPage(browser, true);
     check('G5: no "+1 box" on the tutorial level', !(await page.isVisible('#btn-extra')));
-    await solve(page); await page.waitForSelector('#win-modal:not(.hidden)'); await page.click('#btn-next');
-    await page.waitForTimeout(2400);                       // interstitial (fake) opens and closes
-    check('interstitial asked on Next, game resumes after it', (await page.evaluate(() => __adlog)).includes('showInterstitial:level_completed') && !(await dbg(page)).paused);
-    check('T1: "+1 box" visible on level 2', await page.isVisible('#btn-extra'));
+    const seen = [];
+    let lateGift = 0;
+    for (let lv = 1; lv <= 8; lv++) {
+      const d = await dbg(page);
+      seen.push(d.level + ':' + ((await page.isVisible('#btn-extra')) ? 'yes' : 'no'));
+      if (lv === 8) break;
+      if (lv === 3) {
+        // a "rewarded" from the platform on a level below 8 gives nothing either
+        const n = d.boxes.length;
+        await page.evaluate(() => { const a = bridge.advertisement, E = bridge.EVENT_NAME.REWARDED_STATE_CHANGED;
+          a.emit(E, 'opened'); a.emit(E, 'rewarded'); a.emit(E, 'closed'); });
+        await page.waitForTimeout(200);
+        lateGift = (await dbg(page)).boxes.length - n;
+      }
+      await solve(page); await page.waitForSelector('#win-modal:not(.hidden)'); await page.click('#btn-next');
+      await page.waitForTimeout(2400);                     // interstitial (fake) opens and closes
+      if (lv === 1) check('interstitial asked on Next, game resumes after it', (await page.evaluate(() => __adlog)).includes('showInterstitial:level_completed') && !(await dbg(page)).paused);
+    }
+    check('decision 8: "+1 box" hidden on levels 1-7, shown on level 8',
+      seen.join(' ') === '1:no 2:no 3:no 4:no 5:no 6:no 7:no 8:yes', seen.join(' '));
+    check('decision 8: a "rewarded" event on level 3 gives no box', lateGift === 0, `+${lateGift}`);
+    check('decision 8 test: no console errors', errs.length === 0, errs.join('|'));
+    await ctx.close();
+  }
+
+  // ---------- T1 / G4: rewarded ad with a realistic platform (level 8, from the saved progress)
+  {
+    const { ctx, page, errs } = await openPage(browser, true, 8, 8);
+    check('T1: "+1 box" visible on level 8', await page.isVisible('#btn-extra'));
     const n0 = (await dbg(page)).boxes.length;
     await page.click('#btn-extra');
     await page.waitForTimeout(300);
@@ -98,16 +124,14 @@ async function openPage(browser, fake, unlocked, level) {
     check('N2: L does nothing while the ad runs', await page.isHidden('#levels-modal'));
     await page.waitForTimeout(3000);
     d = await dbg(page);
-    check('N2: reward kept on the same level', d.level === 3 && d.boxes.length === n2 + 1, `level ${d.level}, boxes ${n2} -> ${d.boxes.length}`);
+    check('N2: reward kept on the same level', d.level === 9 && d.boxes.length === n2 + 1, `level ${d.level}, boxes ${n2} -> ${d.boxes.length}`);
     check('rewarded test: no console errors', errs.length === 0, errs.join('|'));
     await ctx.close();
   }
 
-  // ---------- N1-N3: the platform never answers showRewarded()
+  // ---------- N1-N3: the platform never answers showRewarded() (level 8, from the saved progress)
   {
-    const { ctx, page, errs } = await openPage(browser, true);
-    await solve(page); await page.waitForSelector('#win-modal:not(.hidden)'); await page.click('#btn-next');
-    await page.waitForTimeout(2400);
+    const { ctx, page, errs } = await openPage(browser, true, 8, 8);
     await page.evaluate(() => { bridge.advertisement.showRewarded = function () {}; });
     const before = JSON.stringify((await dbg(page)).boxes);
     await page.click('#btn-extra');
