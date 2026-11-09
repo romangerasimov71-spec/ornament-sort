@@ -1,2 +1,5 @@
-Built from commit 0314ac76f7d0fe402e580af5a8aa007e45e3d674 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
-80d5c0cd60c05efa2ef33bbdea22e8e3e916941a0ff97202b7d7b92545997443  ornament-sort-playgama.zip  (18 files, 996 KB unpacked, 631 KB zipped)
+Built from commit 612add0 (game.js with EXTRA_BOX_FROM_LEVEL). The zip is not byte-reproducible across machines (file times), so the sum below is the one that was uploaded.
+a13042eb86f5db01941c9234b722fc77e28bbae695ddaf20e427fc384a330448  ornament-sort-playgama.zip  (18 files, 996 KB unpacked, 646090 bytes zipped)
+
+Загружено 2026-11-09 на Playgama: application cmw92q89r2f3hno0hy7aojapj, archive cmw92qykg2f4sno0hwebq6pfe (имя ornament-sort-playgama-612add0).
+Автопроверка: PASSED, bridgeSdk FOUND, Bridge 2.4.1 (javascript).
