@@ -12,7 +12,7 @@
   var t = I18N.t;
 
   var GAME_VERSION = '1.0.1';      // goes into performance_sample: raise it with every new build for the platforms
-  // support contact (VK requirement): the community «Уютные игры». Empty -> the line in Settings is hidden.
+  // support contact (VK requirement): the community «Уютные игры». Shown in Settings only in VK / OK; empty -> hidden.
   var SUPPORT = 'vk.com/club243202759';
   var UNDO_PER_LEVEL = 5;
   var EXTRA_BOX_FROM_LEVEL = 8;    // "+1 box for an ad" only from this level on: on levels 1-7 a dead end is impossible
@@ -1706,8 +1706,10 @@
     ui.btnCloseSettings.setAttribute('aria-label', t('close'));
     ui.btnExtra.setAttribute('aria-label', t('extra'));
     ui.btnCloseLevels.setAttribute('aria-label', t('close'));
-    ui.supportLine.textContent = SUPPORT ? t('support') + ': ' + SUPPORT : '';
-    ui.supportLine.classList.toggle('hidden', !SUPPORT);
+    // only in VK / OK: on Playgama and Yandex the VK community address is not shown (no other platforms there)
+    var showSup = !!SUPPORT && inVkOk();
+    ui.supportLine.textContent = showSup ? t('support') + ': ' + SUPPORT : '';
+    ui.supportLine.classList.toggle('hidden', !showSup);
   }
 
   function play() {
@@ -1830,6 +1832,17 @@
     document.addEventListener('pointerdown', function () { if (pause.view) setPause('view', false); }, true);
   }
 
+  // launched inside VK or OK: by the Bridge, or by the launch parameters (when the Bridge did not start)
+  function inVkOk() {
+    var id = '';
+    try { id = bridge ? String(bridge.platform.id || '') : ''; } catch (e) { id = ''; }
+    if (id === 'vk' || id === 'ok') return true;
+    var q = '';
+    try { q = location.search || ''; } catch (e2) { q = ''; }
+    return /[?&](vk_app_id|vk_platform|vk_client|vk_user_id)=/.test(q) ||
+      (/[?&](logged_user_id|application_key)=/.test(q) && /[?&](api_server|session_key|auth_sig)=/.test(q));
+  }
+
   // language: the launch parameter of VK / OK first (vk_language, then language), otherwise the platform.
   // Bridge 2.4.1 reads only the old `language` and falls back to navigator.language, so a moderator with an
   // English browser would see the game in English. ru / uk / be / kk -> Russian, anything else -> English.
@@ -1846,6 +1859,8 @@
 
   function start() {
     var lang = launchLanguage();
+    // inside VK / OK without a language parameter: Russian (the main language of the game there)
+    if (!lang && inVkOk()) lang = 'ru';
     if (!lang) {
       try { lang = bridge ? bridge.platform.language : 'en'; } catch (e) { lang = 'en'; }
     }
