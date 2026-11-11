@@ -138,6 +138,9 @@
     window.OS_BRIDGE_READY = true;
   }, function (e) {
     window.OS_BRIDGE_READY = false;
+    // the Bridge's own loading screen stays on top and swallows taps if it never finished: remove it
+    var ov = document.getElementById('loading-overlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
     console.warn('Bridge initialization failed, running without it:', e);
   }).then(function () { load(0); });
 })();
