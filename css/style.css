@@ -409,6 +409,7 @@ svg .fill { fill: currentColor; }
 .set-row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; column-gap: 10px; row-gap: 6px;
   margin: 12px 0; padding: 10px 12px; border-radius: 16px; background: rgba(138, 27, 39, .08); text-align: left; }
 .set-row > svg { width: 28px; height: 28px; color: #a91a27; }
+.support-line { margin: 10px 0 0; font-size: 14px; opacity: .7; word-break: break-word; }
 .set-row .lbl { font-weight: 800; font-size: clamp(16px, min(4.4vw, 4vh), 19px); }
 .set-row input[type=range] { grid-column: 1 / 4; width: 100%; height: 28px; margin: 0; accent-color: #c3263a; touch-action: pan-x; cursor: pointer; }
 .set-row input[type=range]:disabled { opacity: .4; }

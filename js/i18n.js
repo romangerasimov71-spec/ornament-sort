@@ -1,4 +1,4 @@
-/* Texts. The language comes only from bridge.platform.language (see game.js). */
+/* Texts. The language: vk_language / language from the launch address first, then bridge.platform.language (see game.js). */
 (function () {
   'use strict';
   var STR = {
@@ -29,6 +29,7 @@
       allDone: 'All levels done! More are on the way.',
       close: 'Close',
       settings: 'Settings',
+      support: 'Support and news',
       music: 'Music',
       sfx: 'Sounds',
       musicVol: 'Music volume',
@@ -65,6 +66,7 @@
       allDone: 'Все уровни пройдены! Скоро будут новые.',
       close: 'Закрыть',
       settings: 'Настройки',
+      support: 'Поддержка и новинки',
       music: 'Музыка',
       sfx: 'Звуки',
       musicVol: 'Громкость музыки',

@@ -11,7 +11,9 @@
   var SND = window.OSAudio;
   var t = I18N.t;
 
-  var GAME_VERSION = '1.0.0';      // goes into performance_sample: raise it with every new build for the platforms
+  var GAME_VERSION = '1.0.1';      // goes into performance_sample: raise it with every new build for the platforms
+  // support contact (VK requirement): the community «Уютные игры». Empty -> the line in Settings is hidden.
+  var SUPPORT = 'vk.com/club243202759';
   var UNDO_PER_LEVEL = 5;
   var EXTRA_BOX_FROM_LEVEL = 8;    // "+1 box for an ad" only from this level on: on levels 1-7 a dead end is impossible
   var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_settings'];
@@ -45,7 +47,7 @@
     btnLevels: $('btn-levels'), btnSettings: $('btn-settings'), levelInfo: $('level-info'), btnUndo: $('btn-undo'),
     settings: $('settings-modal'), settingsTitle: $('settings-title'), btnCloseSettings: $('btn-close-settings'),
     swMusic: $('sw-music'), swSfx: $('sw-sfx'), volMusic: $('vol-music'), volSfx: $('vol-sfx'),
-    lblMusic: $('lbl-music'), lblSfx: $('lbl-sfx'),
+    lblMusic: $('lbl-music'), lblSfx: $('lbl-sfx'), supportLine: $('support-line'),
     undoCount: $('undo-count'), btnExtra: $('btn-extra'), extraLabel: $('extra-label'),
     btnRestart: $('btn-restart'), chip: $('hint-chip'), hand: $('hand'), toast: $('toast'),
     title: $('title-screen'), titleText: $('title-text'), subtitle: $('subtitle-text'), btnPlay: $('btn-play'),
@@ -61,7 +63,7 @@
   var area = { x: 0, y: 0, w: 0, h: 0 };
   var garlandY = 0, garlandSag = 30;
   var mode = 'boot';                // boot | title | play
-  var pause = { platform: false, hidden: false, ad: false };
+  var pause = { platform: false, hidden: false, ad: false, view: false };
   var platformAudio = true;
   var now = 0, lastFrame = 0;
 
@@ -135,7 +137,7 @@
   }
 
   // ---------------------------------------------------------------- pause / audio
-  function isPaused() { return pause.platform || pause.hidden || pause.ad; }
+  function isPaused() { return pause.platform || pause.hidden || pause.ad || pause.view; }
   function setPause(reason, on) {
     pause[reason] = !!on;
     updateAudio();
@@ -1704,6 +1706,8 @@
     ui.btnCloseSettings.setAttribute('aria-label', t('close'));
     ui.btnExtra.setAttribute('aria-label', t('extra'));
     ui.btnCloseLevels.setAttribute('aria-label', t('close'));
+    ui.supportLine.textContent = SUPPORT ? t('support') + ': ' + SUPPORT : '';
+    ui.supportLine.classList.toggle('hidden', !SUPPORT);
   }
 
   function play() {
@@ -1737,6 +1741,7 @@
     document.addEventListener('dblclick', function (e) { e.preventDefault(); });
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
     document.addEventListener('visibilitychange', function () { setPause('hidden', document.hidden); });
+    subscribeVkView();
     canvas.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('keydown', onKey);
     ui.btnPlay.addEventListener('click', play);
@@ -1806,10 +1811,44 @@
     }
   }
 
+  // VK: the app is minimized / restored (VKWebAppViewHide / VKWebAppViewRestore). Playgama Bridge 2.4.1
+  // does not listen to these, so we subscribe to VK Bridge ourselves (rule 2.2.5 of VK: silence on ViewHide).
+  // OK has no such events: there visibilitychange does the job.
+  function subscribeVkView() {
+    var vkb = null;
+    try { if (bridge && bridge.platform && bridge.platform.sdk && typeof bridge.platform.sdk.subscribe === 'function') vkb = bridge.platform.sdk; } catch (e) { vkb = null; }
+    if (!vkb && window.vkBridge && typeof window.vkBridge.subscribe === 'function') vkb = window.vkBridge;
+    if (!vkb) return;
+    try {
+      vkb.subscribe(function (e) {
+        var type = e && e.detail && e.detail.type;
+        if (type === 'VKWebAppViewHide') setPause('view', true);
+        else if (type === 'VKWebAppViewRestore') setPause('view', false);
+      });
+    } catch (e2) { /* no VK events */ }
+    // safety: if a ViewRestore is ever lost, the next touch means the app is on screen again
+    document.addEventListener('pointerdown', function () { if (pause.view) setPause('view', false); }, true);
+  }
+
+  // language: the launch parameter of VK / OK first (vk_language, then language), otherwise the platform.
+  // Bridge 2.4.1 reads only the old `language` and falls back to navigator.language, so a moderator with an
+  // English browser would see the game in English. ru / uk / be / kk -> Russian, anything else -> English.
+  function launchLanguage() {
+    var code = '';
+    try {
+      var q = new URLSearchParams(location.search);
+      code = q.get('vk_language') || q.get('language') || '';
+    } catch (e) { code = ''; }
+    if (!code) return '';
+    code = String(code).toLowerCase();
+    return /^(ru|uk|be|kk)/.test(code) ? 'ru' : 'en';
+  }
+
   function start() {
-    // language: only from the platform
-    var lang = 'en';
-    try { lang = bridge ? bridge.platform.language : 'en'; } catch (e) { lang = 'en'; }
+    var lang = launchLanguage();
+    if (!lang) {
+      try { lang = bridge ? bridge.platform.language : 'en'; } catch (e) { lang = 'en'; }
+    }
     I18N.setLanguage(lang);
     applyTexts();
     if (AN) AN.init(bridge, { gameVersion: GAME_VERSION, targetFps: 60 });

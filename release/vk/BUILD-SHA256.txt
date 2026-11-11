@@ -1,2 +1,2 @@
-Built from commit 0314ac76f7d0fe402e580af5a8aa007e45e3d674 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
-80d5c0cd60c05efa2ef33bbdea22e8e3e916941a0ff97202b7d7b92545997443  ornament-sort-vk.zip  (18 files, 996 KB unpacked, 631 KB zipped)
+Built from commit 2be167d8a637a99d8622b7ed133f19b9968c4482 (the sum of the zip changes whenever game files change; the build is not byte-reproducible across machines because of file times)
+ea12ad2eb9bb25b3b8824cf8d8baab894740e943c760c93c33aa1ceb69bca14c  ornament-sort-vk.zip  (18 files, 998 KB unpacked, 632 KB zipped)

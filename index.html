@@ -105,6 +105,7 @@
         <button id="sw-sfx" class="switch" type="button" role="switch" aria-checked="true"></button>
         <input id="vol-sfx" type="range" min="0" max="100" step="1">
       </div>
+      <p id="support-line" class="support-line hidden"></p>
     </div>
   </div>
 
@@ -128,6 +129,11 @@
   } catch (e) {
     init = Promise.reject(e);
   }
+  // In VK / OK the Bridge loads VK Bridge from unpkg.com; if that never answers, start without the Bridge
+  // after 8 s instead of spinning forever.
+  init = Promise.race([init, new Promise(function (_, reject) {
+    setTimeout(function () { reject(new Error('Bridge initialization timeout')); }, 8000);
+  })]);
   init.then(function () {
     window.OS_BRIDGE_READY = true;
   }, function (e) {
