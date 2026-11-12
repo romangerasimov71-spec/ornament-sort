@@ -1,0 +1,170 @@
+# Android app for RuStore: the game in a WebView (android/), built into an APK.
+# The APK goes to the branch `rustore-build` (folder apk/), never to main.
+# Signing: secrets KEYSTORE_BASE64 (the .jks file in base64), KEYSTORE_PASSWORD, KEY_ALIAS
+# (key password = KEYSTORE_PASSWORD). Without them a debug-signed APK is built (only to check the build).
+name: Android APK (RuStore)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'js/**'
+      - 'css/**'
+      - 'audio/**'
+      - 'index.html'
+      - 'playgama-bridge.js'
+      - 'playgama-bridge-config.json'
+      - 'tools/build-release.js'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: false
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_KEY: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Game files (release package) -> android assets
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP"
+          node tools/build-release.js 2>&1 | tee "$RUNNER_TEMP/build.log"
+          rm -rf android/app/src/main/assets/www
+          mkdir -p android/app/src/main/assets/www
+          cp -R dist/ornament-sort/. android/app/src/main/assets/www/
+          ls -R android/app/src/main/assets/www | head -50
+
+      - name: Version
+        id: ver
+        run: |
+          v=$(grep -oP "GAME_VERSION = '\K[^']+" js/game.js)
+          echo "name=$v" >> "$GITHUB_OUTPUT"
+          echo "versionName=$v"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        id: build
+        working-directory: android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            ./gradlew --no-daemon --stacktrace assembleRelease \
+              -PksFile="$RUNNER_TEMP/release.jks" -PksPass="$KEYSTORE_PASSWORD" -PksAlias="$KEY_ALIAS" \
+              2>&1 | tee -a "$RUNNER_TEMP/build.log"
+            src=app/build/outputs/apk/release/app-release.apk
+            kind=release
+          else
+            echo "No signing secrets: debug-signed build"
+            ./gradlew --no-daemon --stacktrace assembleDebug 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+            src=app/build/outputs/apk/debug/app-debug.apk
+            kind=debug
+          fi
+          mkdir -p "$RUNNER_TEMP/apk"
+          name="ornament-sort-${{ steps.ver.outputs.name }}-$kind.apk"
+          cp "$src" "$RUNNER_TEMP/apk/$name"
+          echo "file=$name" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          ls -la "$RUNNER_TEMP/apk"
+          rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Check APK (permissions, signature, contents)
+        run: |
+          set -o pipefail
+          f="$RUNNER_TEMP/apk/${{ steps.build.outputs.file }}"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          {
+            echo "== aapt dump badging"
+            "$BT/aapt" dump badging "$f" | grep -E "package:|sdkVersion|targetSdkVersion|application-label|uses-permission|launchable-activity" || true
+            echo "== apksigner"
+            "$BT/apksigner" verify --print-certs "$f" | head -5 || true
+            echo "== files"
+            unzip -l "$f" | grep -E "assets/www/(index.html|js/game.js|playgama-bridge.js)|classes.dex" || true
+          } | tee "$RUNNER_TEMP/apk-info.txt"
+
+      - name: Publish APK to branch rustore-build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          url="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          out="$RUNNER_TEMP/out"
+          if git ls-remote --exit-code --heads "$url" rustore-build >/dev/null 2>&1; then
+            git clone --depth 1 --branch rustore-build "$url" "$out"
+          else
+            git init -q -b rustore-build "$out"
+            git -C "$out" remote add origin "$url"
+          fi
+          cd "$out"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -rf apk build-log.txt
+          mkdir -p apk
+          cp "$RUNNER_TEMP/apk/${{ steps.build.outputs.file }}" apk/
+          {
+            echo "APK: apk/${{ steps.build.outputs.file }}"
+            echo "Signed: ${{ steps.build.outputs.kind }}"
+            echo "Size: $(stat -c %s apk/${{ steps.build.outputs.file }}) bytes"
+            echo "From main: ${{ github.sha }}"
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo
+            cat "$RUNNER_TEMP/apk-info.txt"
+          } > build-info.txt
+          sha256sum apk/*.apk > apk/SHA256.txt
+          git add -A
+          git commit -q -m "APK ${{ steps.build.outputs.kind }} ${{ steps.ver.outputs.name }} из ${GITHUB_SHA::7}"
+          git push -q origin HEAD:rustore-build
+
+      - name: On failure - save the log tail to branch rustore-build (build-log.txt)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          out="$RUNNER_TEMP/outlog"
+          rm -rf "$out"
+          if git ls-remote --exit-code --heads "$url" rustore-build >/dev/null 2>&1; then
+            git clone --depth 1 --branch rustore-build "$url" "$out"
+          else
+            git init -q -b rustore-build "$out"
+            git -C "$out" remote add origin "$url"
+          fi
+          cd "$out"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          {
+            echo "FAILED build from main ${{ github.sha }} at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            tail -n 400 "$RUNNER_TEMP/build.log" 2>/dev/null || echo "(no build log)"
+          } > build-log.txt
+          git add build-log.txt
+          git commit -q -m "Сборка APK упала (${GITHUB_SHA::7}): build-log.txt"
+          git push -q origin HEAD:rustore-build
