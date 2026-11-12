@@ -101,7 +101,7 @@ jobs:
           BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           {
             echo "== aapt dump badging"
-            "$BT/aapt" dump badging "$f" | grep -E "package:|sdkVersion|targetSdkVersion|application-label|uses-permission|launchable-activity" || true
+            "$BT/aapt" dump badging "$f" | grep -E "^(package:|sdkVersion|targetSdkVersion|application-label:|uses-permission|launchable-activity)" || true
             echo "== apksigner"
             "$BT/apksigner" verify --print-certs "$f" | head -5 || true
             echo "== files"

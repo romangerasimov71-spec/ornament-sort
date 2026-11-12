@@ -12,6 +12,7 @@ e.g. `NODE_PATH=/opt/node-tools/node_modules node tests/flow.js`):
     node tests/analytics.js       # analytics events (docs/analytics.md): data, no duplicates, performance_sample every ~30 s, works without the module (~1 min)
     node tests/gap.js             # the hint / dead-end line keeps 6 px above the buttons at every size
     node tests/perf.js            # fps and main-thread load at 390x844@2, 1366x768@1, 1920x1080@2
+    node tests/android.js         # Android app mode (RuStore, user agent mark): no ads, no VK line, back(), appPause(), saves
 
 Ads test kit, 12 cases (rewarded: watched / closed / failed / silent / late / "rewarded" twice / late after restart, win,
 another level; interstitial: shown / failed / silent):

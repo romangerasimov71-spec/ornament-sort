@@ -60,6 +60,28 @@ playgama-bridge-config.json) и делает архив `dist/ornament-sort.zip`
 нет тестов/документов/прототипа, только латинские имена, все файлы на месте.
 Папка `dist/` в git не попадает. Этот архив и загружается на площадку.
 
+## Android / RuStore
+- `android/` — приложение-обёртка: одна Activity с WebView на весь экран (портрет и альбом), игра из assets по
+  `https://appassets.androidplatform.net/assets/www/index.html` (WebViewAssetLoader, не file://), без разрешений
+  (даже INTERNET). Пакет `ru.german71.ornamentsort`, minSdk 24, targetSdk 35, versionName берётся из `GAME_VERSION`
+  в `js/game.js`; versionCode — 1 (для каждой новой загрузки в RuStore поднимать: `-PversionCode=N` или в `app/build.gradle`).
+- Признак приложения — `OrnamentSortAndroid/<версия>` в user agent WebView (`ANDROID` в `js/game.js`): нет рекламы
+  (ни «+1 коробка», ни межуровневой), нет строки «Поддержка: vk.com». «Назад» — `OSGame.back()` (закрывает окно
+  настроек / уровней; если открытого окна нет — выход); свернули приложение — `OSGame.appPause(true)` (пауза и тишина).
+  Проверка — `tests/android.js`. В ВК/ОК/Playgama/Яндекс признака нет, там всё как было.
+- APK собирает GitHub Actions (`.github/workflows/android.yml`) при пуше в `main` (android/, js/, css/, audio/,
+  index.html, Bridge) или вручную (Run workflow): `tools/build-release.js` → копия `dist/ornament-sort/` в
+  `android/app/src/main/assets/www/` (в git её нет) → Gradle. Готовый APK кладётся в ветку **`rustore-build`**:
+  `apk/ornament-sort-<версия>-<release|debug>.apk`, рядом `build-info.txt` (разрешения, подпись) и `apk/SHA256.txt`.
+  Забрать: `git fetch origin rustore-build && git show origin/rustore-build:apk/<файл> > <файл>`. Упала сборка —
+  хвост лога в `build-log.txt` той же ветки. APK в `main` не коммитить.
+- Подпись: секреты репозитория `KEYSTORE_BASE64` (файл .jks в base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS`
+  (пароль ключа = пароль хранилища). Есть все три — собирается release, нет — debug (только проверить сборку,
+  в RuStore debug не загружают). Ключ хранить у Романа: тем же ключом подписываются все обновления.
+- Локально (нужен Android SDK): скопировать игру в assets как в workflow, затем `cd android && ./gradlew assembleDebug`.
+- Иконки: `python3 android/tools/make_icons.py` (из `release/vk/assets/icon-576x576.png`). Карточка RuStore —
+  `release/rustore/` (тексты, иконка 512, скриншоты — `release/_src/capture-rustore.js`).
+
 ## Уровни
 - `node tools/generate-levels.js` — первичная сборка уровней 5–85 по плану в начале
   файла (уровни 1–4 не трогает). Внимание: он затрёт подбор `tune-levels`, поэтому
