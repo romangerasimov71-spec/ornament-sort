@@ -17,6 +17,9 @@
   var UNDO_PER_LEVEL = 5;
   var EXTRA_BOX_FROM_LEVEL = 8;    // "+1 box for an ad" only from this level on: on levels 1-7 a dead end is impossible
   var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_settings'];
+  // Android app (RuStore): its WebView adds "OrnamentSortAndroid/<version>" to the user agent.
+  // There are no ads (rewarded and interstitial) and no VK support line in the app.
+  var ANDROID = /OrnamentSortAndroid\//.test((window.navigator && navigator.userAgent) || '');
 
   // ---------------------------------------------------------------- colors
   // Every color also has its own pattern, so ornaments differ not only by hue.
@@ -133,6 +136,7 @@
     return !!G && G.index + 1 >= EXTRA_BOX_FROM_LEVEL;
   }
   function rewardedSupported() {
+    if (ANDROID) return false;
     return !!(bridge && bridge.advertisement && bridge.advertisement.isRewardedSupported);
   }
 
@@ -1170,7 +1174,7 @@
     SND.play('button');
     ui.win.classList.add('hidden');
     // natural pause between levels: let the Bridge decide whether an ad is shown
-    bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
+    if (!ANDROID) bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
     if (G.index + 1 >= LEVELS.length) { startLevel(G.index, 'replay'); openLevels('final'); return; }
     startLevel(Math.min(G.index + 1, save.unlocked - 1), 'next');   // never past the unlocked levels
   }
@@ -1178,7 +1182,7 @@
   function replayLevel() {
     SND.play('button');
     ui.win.classList.add('hidden');
-    bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
+    if (!ANDROID) bridgeCall(function (b) { return b.advertisement.showInterstitial('level_completed'); });
     G.extraUsed = false; // a replay is a new attempt
     startLevel(G.index, 'replay');
   }
@@ -1707,7 +1711,7 @@
     ui.btnExtra.setAttribute('aria-label', t('extra'));
     ui.btnCloseLevels.setAttribute('aria-label', t('close'));
     // only in VK / OK: on Playgama and Yandex the VK community address is not shown (no other platforms there)
-    var showSup = !!SUPPORT && inVkOk();
+    var showSup = !!SUPPORT && !ANDROID && inVkOk();
     ui.supportLine.textContent = showSup ? t('support') + ': ' + SUPPORT : '';
     ui.supportLine.classList.toggle('hidden', !showSup);
   }
@@ -1894,6 +1898,14 @@
   // Small read-only hook for automated tests.
   window.OSGame = {
     start: start,
+    // Android app: the "Back" button. Closes an open window and returns true; false = nothing to close (the app exits).
+    back: function () {
+      if (!ui.settings.classList.contains('hidden')) { closeSettings(); return true; }
+      if (!ui.levels.classList.contains('hidden')) { closeLevels(); return true; }
+      return false;
+    },
+    // Android app: the app went to the background (true) or came back (false) -> pause and silence, like a hidden tab.
+    appPause: function (on) { setPause('view', !!on); },
     debug: function () {
       return {
         mode: mode,
