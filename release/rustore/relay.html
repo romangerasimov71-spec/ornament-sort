@@ -1,0 +1,11 @@
+<!doctype html><meta charset="utf-8"><title>relay</title>
+<!-- Служебная страница: передаёт картинки карточки RuStore в кабинет RuStore (postMessage). Игре не нужна. -->
+<script>
+addEventListener('message', async e => {
+  if (e.origin !== 'https://console.rustore.ru' || !e.data || !e.data.get) return;
+  const out = [];
+  for (const p of e.data.get) { const r = await fetch(p); out.push({name: p.split('/').pop(), blob: await r.blob()}); }
+  e.source.postMessage({files: out}, e.origin);
+});
+parent.postMessage({relayReady: true}, '*');
+</script>
