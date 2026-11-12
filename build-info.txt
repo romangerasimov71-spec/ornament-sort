@@ -1,106 +1,21 @@
 APK: apk/ornament-sort-1.0.1-debug.apk
 Signed: debug
 Size: 3475493 bytes
-From main: 9f2cae1980dbad9cc082b62ecb73a35943db1133
-Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43198028855
-Built: 2026-11-12T10:11:35Z
+From main: 75e98230da02c67e4309c7d1b7da9d205ba754cd
+Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43198351240
+Built: 2026-11-12T10:13:28Z
 
 == aapt dump badging
 package: name='ru.german71.ornamentsort' versionCode='1' versionName='1.0.1' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
 sdkVersion:'24'
 targetSdkVersion:'35'
 application-label:'Новогодняя сортировка'
-application-label-af:'Новогодняя сортировка'
-application-label-am:'Новогодняя сортировка'
-application-label-ar:'Новогодняя сортировка'
-application-label-as:'Новогодняя сортировка'
-application-label-az:'Новогодняя сортировка'
-application-label-be:'Новогодняя сортировка'
-application-label-bg:'Новогодняя сортировка'
-application-label-bn:'Новогодняя сортировка'
-application-label-bs:'Новогодняя сортировка'
-application-label-ca:'Новогодняя сортировка'
-application-label-cs:'Новогодняя сортировка'
-application-label-da:'Новогодняя сортировка'
-application-label-de:'Новогодняя сортировка'
-application-label-el:'Новогодняя сортировка'
-application-label-en-AU:'Новогодняя сортировка'
-application-label-en-CA:'Новогодняя сортировка'
-application-label-en-GB:'Новогодняя сортировка'
-application-label-en-IN:'Новогодняя сортировка'
-application-label-en-XC:'Новогодняя сортировка'
-application-label-es:'Новогодняя сортировка'
-application-label-es-US:'Новогодняя сортировка'
-application-label-et:'Новогодняя сортировка'
-application-label-eu:'Новогодняя сортировка'
-application-label-fa:'Новогодняя сортировка'
-application-label-fi:'Новогодняя сортировка'
-application-label-fr:'Новогодняя сортировка'
-application-label-fr-CA:'Новогодняя сортировка'
-application-label-gl:'Новогодняя сортировка'
-application-label-gu:'Новогодняя сортировка'
-application-label-hi:'Новогодняя сортировка'
-application-label-hr:'Новогодняя сортировка'
-application-label-hu:'Новогодняя сортировка'
-application-label-hy:'Новогодняя сортировка'
-application-label-in:'Новогодняя сортировка'
-application-label-is:'Новогодняя сортировка'
-application-label-it:'Новогодняя сортировка'
-application-label-iw:'Новогодняя сортировка'
-application-label-ja:'Новогодняя сортировка'
-application-label-ka:'Новогодняя сортировка'
-application-label-kk:'Новогодняя сортировка'
-application-label-km:'Новогодняя сортировка'
-application-label-kn:'Новогодняя сортировка'
-application-label-ko:'Новогодняя сортировка'
-application-label-ky:'Новогодняя сортировка'
-application-label-lo:'Новогодняя сортировка'
-application-label-lt:'Новогодняя сортировка'
-application-label-lv:'Новогодняя сортировка'
-application-label-mk:'Новогодняя сортировка'
-application-label-ml:'Новогодняя сортировка'
-application-label-mn:'Новогодняя сортировка'
-application-label-mr:'Новогодняя сортировка'
-application-label-ms:'Новогодняя сортировка'
-application-label-my:'Новогодняя сортировка'
-application-label-nb:'Новогодняя сортировка'
-application-label-ne:'Новогодняя сортировка'
-application-label-nl:'Новогодняя сортировка'
-application-label-or:'Новогодняя сортировка'
-application-label-pa:'Новогодняя сортировка'
-application-label-pl:'Новогодняя сортировка'
-application-label-pt:'Новогодняя сортировка'
-application-label-pt-BR:'Новогодняя сортировка'
-application-label-pt-PT:'Новогодняя сортировка'
-application-label-ro:'Новогодняя сортировка'
-application-label-ru:'Новогодняя сортировка'
-application-label-si:'Новогодняя сортировка'
-application-label-sk:'Новогодняя сортировка'
-application-label-sl:'Новогодняя сортировка'
-application-label-sq:'Новогодняя сортировка'
-application-label-sr:'Новогодняя сортировка'
-application-label-sr-Latn:'Новогодняя сортировка'
-application-label-sv:'Новогодняя сортировка'
-application-label-sw:'Новогодняя сортировка'
-application-label-ta:'Новогодняя сортировка'
-application-label-te:'Новогодняя сортировка'
-application-label-th:'Новогодняя сортировка'
-application-label-tl:'Новогодняя сортировка'
-application-label-tr:'Новогодняя сортировка'
-application-label-uk:'Новогодняя сортировка'
-application-label-ur:'Новогодняя сортировка'
-application-label-uz:'Новогодняя сортировка'
-application-label-vi:'Новогодняя сортировка'
-application-label-zh-CN:'Новогодняя сортировка'
-application-label-zh-HK:'Новогодняя сортировка'
-application-label-zh-TW:'Новогодняя сортировка'
-application-label-zu:'Новогодняя сортировка'
 launchable-activity: name='ru.german71.ornamentsort.MainActivity'  label='' icon=''
 == apksigner
 V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
-V2 Signer: certificate SHA-256 digest: 5a362e2938b3c4a0edf7e5324b464449c93a9f21be662e9c8d7032535820a76f
-V2 Signer: certificate SHA-1 digest: 4f63c5804fbc4d29aad0d156055e5239d57661a1
-V2 Signer: certificate MD5 digest: 8aa4905d0c38af0cadbbc92c5209dca5
+V2 Signer: certificate SHA-256 digest: 36bddcbb4ae556fcf6c08a4d2ee4de30f445620ca89914c85e0198c36a61c519
+V2 Signer: certificate SHA-1 digest: 8779ebbd0007f1f6860b82ee78b872f11e701b3d
+V2 Signer: certificate MD5 digest: 19a6de887fd11ca70f97b47d1e55c993
 == files
   5480560  1981-01-01 01:01   classes.dex
      7193  1981-01-01 01:01   assets/www/index.html
