@@ -1,1 +1,1 @@
-7e24f1a7fdf28ab79832196171d6c05bbb392ac60c8c923491503308419136a3  apk/ornament-sort-1.0.1-debug.apk
+e9d24f3d92dd7c4249e39920142c46e3e7bcb33184046c9e2ef00d13e0807bfe  apk/ornament-sort-1.0.1-release.apk

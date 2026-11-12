@@ -1,9 +1,9 @@
-APK: apk/ornament-sort-1.0.1-debug.apk
-Signed: debug
-Size: 3475493 bytes
+APK: apk/ornament-sort-1.0.1-release.apk
+Signed: release
+Size: 2936748 bytes
 From main: 75e98230da02c67e4309c7d1b7da9d205ba754cd
-Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43198351240
-Built: 2026-11-12T10:13:28Z
+Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43210010263
+Built: 2026-11-12T11:33:19Z
 
 == aapt dump badging
 package: name='ru.german71.ornamentsort' versionCode='1' versionName='1.0.1' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
@@ -12,12 +12,12 @@ targetSdkVersion:'35'
 application-label:'Новогодняя сортировка'
 launchable-activity: name='ru.german71.ornamentsort.MainActivity'  label='' icon=''
 == apksigner
-V2 Signer: certificate DN: C=US, O=Android, CN=Android Debug
-V2 Signer: certificate SHA-256 digest: 36bddcbb4ae556fcf6c08a4d2ee4de30f445620ca89914c85e0198c36a61c519
-V2 Signer: certificate SHA-1 digest: 8779ebbd0007f1f6860b82ee78b872f11e701b3d
-V2 Signer: certificate MD5 digest: 19a6de887fd11ca70f97b47d1e55c993
+V2 Signer: certificate DN: CN=German71, O=German71, C=RU
+V2 Signer: certificate SHA-256 digest: bfcd4e90566fef4ec2c61aaf1e63dcd87531e72fd1a5f57f55c3c83d7cf01ee2
+V2 Signer: certificate SHA-1 digest: 136a8ec63ca12341cc8420451da0ed66eb10cf12
+V2 Signer: certificate MD5 digest: 92c95a7ec7298f5cb771e215804688e3
 == files
-  5480560  1981-01-01 01:01   classes.dex
+  4644240  1981-01-01 01:01   classes.dex
      7193  1981-01-01 01:01   assets/www/index.html
     80091  1981-01-01 01:01   assets/www/js/game.js
    380015  1981-01-01 01:01   assets/www/playgama-bridge.js
