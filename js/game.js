@@ -12,8 +12,9 @@
   var t = I18N.t;
 
   var GAME_VERSION = '1.0.1';      // goes into performance_sample: raise it with every new build for the platforms
-  // support contact (VK requirement): the community «Уютные игры». Shown in Settings only in VK / OK; empty -> hidden.
-  var SUPPORT = 'vk.com/club243202759';
+  // support contact (VK requirement): the studio group «Уютные игры». Shown in Settings only in VK / OK; empty -> hidden.
+  // In OK only the OK group (no vk.com, no «ВКонтакте» — OK moderation risk); in VK the VK community.
+  var SUPPORT = { vk: 'vk.com/club243202759', ok: 'ok.ru/group/70000061487179' };
   var UNDO_PER_LEVEL = 5;
   var EXTRA_BOX_FROM_LEVEL = 8;    // "+1 box for an ad" only from this level on: on levels 1-7 a dead end is impossible
   var KEYS = ['os_level', 'os_unlocked', 'os_stars', 'os_settings'];
@@ -1711,8 +1712,9 @@
     ui.btnExtra.setAttribute('aria-label', t('extra'));
     ui.btnCloseLevels.setAttribute('aria-label', t('close'));
     // only in VK / OK: on Playgama and Yandex the VK community address is not shown (no other platforms there)
-    var showSup = !!SUPPORT && !ANDROID && inVkOk();
-    ui.supportLine.textContent = showSup ? t('support') + ': ' + SUPPORT : '';
+    var supText = ANDROID || !inVkOk() ? '' : (inOk() ? SUPPORT.ok : SUPPORT.vk) || '';
+    var showSup = !!supText;
+    ui.supportLine.textContent = showSup ? t('support') + ': ' + supText : '';
     ui.supportLine.classList.toggle('hidden', !showSup);
   }
 
@@ -1837,6 +1839,18 @@
   }
 
   // launched inside VK or OK: by the Bridge, or by the launch parameters (when the Bridge did not start)
+  // OK: Bridge 2.4.1 inside OK may answer 'vk', so the launch address decides
+  // (vk_client=ok / vk_platform=*_ok — OK through VK Bridge; logged_user_id + application_key — OK directly).
+  function inOk() {
+    var id = '';
+    try { id = bridge ? String(bridge.platform.id || '') : ''; } catch (e) { id = ''; }
+    if (id === 'ok') return true;
+    var q = '';
+    try { q = location.search || ''; } catch (e2) { q = ''; }
+    return /[?&]vk_client=ok(&|$)/.test(q) || /[?&]vk_platform=[a-z_]+_ok(&|$)/.test(q) ||
+      (/[?&](logged_user_id|application_key)=/.test(q) && /[?&](api_server|session_key|auth_sig)=/.test(q));
+  }
+
   function inVkOk() {
     var id = '';
     try { id = bridge ? String(bridge.platform.id || '') : ''; } catch (e) { id = ''; }
