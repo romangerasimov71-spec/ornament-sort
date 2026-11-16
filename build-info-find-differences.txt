@@ -1,0 +1,25 @@
+APK: apk/find-differences-1.2.0-release.apk
+Game: romangerasimov71-spec/find-differences (main 2e89b3c3e6dcfca7075141cfb8e5ceec357aa0d2)
+Signed: release
+versionName: 1.2.0  versionCode: 1
+Size: 4849911 bytes
+Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43890371087
+Built: 2026-11-16T14:53:39Z
+
+== aapt dump badging
+package: name='ru.german71.finddifferences' versionCode='1' versionName='1.2.0' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+sdkVersion:'24'
+targetSdkVersion:'35'
+application-label:'Найди отличия: Новый год'
+launchable-activity: name='ru.german71.finddifferences.MainActivity'  label='' icon=''
+== apksigner
+V2 Signer: certificate DN: CN=German71, O=German71, C=RU
+V2 Signer: certificate SHA-256 digest: bfcd4e90566fef4ec2c61aaf1e63dcd87531e72fd1a5f57f55c3c83d7cf01ee2
+V2 Signer: certificate SHA-1 digest: 136a8ec63ca12341cc8420451da0ed66eb10cf12
+V2 Signer: certificate MD5 digest: 92c95a7ec7298f5cb771e215804688e3
+== files
+  4644284  1981-01-01 01:01   classes.dex
+     7984  1981-01-01 01:01   assets/www/index.html
+    98958  1981-01-01 01:01   assets/www/js/game.min.js
+     5121  1981-01-01 01:01   assets/www/js/platform.min.js
+     4389  1981-01-01 01:01   assets/www/js/vk-bridge.min.js
