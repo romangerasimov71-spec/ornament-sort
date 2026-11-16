@@ -1,10 +1,10 @@
 APK: apk/find-differences-1.2.0-release.apk
-Game: romangerasimov71-spec/find-differences (main 2e89b3c3e6dcfca7075141cfb8e5ceec357aa0d2)
+Game: romangerasimov71-spec/find-differences (main b5301cf14bf4a1aa1140b37935fbac7320308766)
 Signed: release
 versionName: 1.2.0  versionCode: 1
 Size: 4849911 bytes
-Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43890371087
-Built: 2026-11-16T14:53:39Z
+Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43892010843
+Built: 2026-11-16T15:02:51Z
 
 == aapt dump badging
 package: name='ru.german71.finddifferences' versionCode='1' versionName='1.2.0' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
