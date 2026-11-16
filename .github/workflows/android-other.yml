@@ -1,10 +1,12 @@
 # Android APK (RuStore) for OTHER games of the studio, signed with the same key as Ornament Sort.
 # The signing secrets (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS) live only in this repository,
-# so the other games are built here: checkout the public game repository (branch main), build its web
-# version, copy it into the game's own android/ project (kept in the game repository), build a release APK.
+# so the other games (and mini-apps) are built here: checkout the public repository (branch main), build its web
+# version, copy it into its own android/ project (kept in that repository), build a release APK.
 # The APK goes to the branch `rustore-build` of THIS repository (folder apk/), next to Ornament Sort's APK:
-#   apk/find-differences-<version>-release.apk, apk/snowball-<version>-release.apk
-#   build-info-<game>.txt, apk/SHA256.txt (all APKs). Other games' files are never touched.
+#   apk/find-differences-<version>-release.apk, apk/snowball-<version>-release.apk,
+#   apk/recipes-<version>-release.apk (new-year-recipes), apk/quiz-time-<version>-release.apk (quiz-time)
+#   build-info-<repo>.txt, apk/SHA256.txt (all APKs). Other games' files are never touched.
+# game: one repository, `both` = find-differences + snowball-game, `all` = all four.
 # Run: Actions -> "Android APK (other games)" -> Run workflow -> game.  CLI: gh workflow run android-other.yml -f game=snowball-game
 name: Android APK (other games)
 
@@ -18,7 +20,10 @@ on:
         options:
           - find-differences
           - snowball-game
+          - new-year-recipes
+          - quiz-time
           - both
+          - all
       versionCode:
         description: 'versionCode (raise for every new upload to RuStore)'
         required: false
@@ -34,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        game: ${{ fromJSON(inputs.game == 'both' && '["find-differences","snowball-game"]' || format('["{0}"]', inputs.game)) }}
+        game: ${{ fromJSON(inputs.game == 'all' && '["find-differences","snowball-game","new-year-recipes","quiz-time"]' || inputs.game == 'both' && '["find-differences","snowball-game"]' || format('["{0}"]', inputs.game)) }}
     concurrency:
       group: android-other-${{ matrix.game }}
       cancel-in-progress: false
@@ -64,10 +69,14 @@ jobs:
           case "$GAME" in
             find-differences) prefix=find-differences; verfile=src/js/game.js ;;
             snowball-game)    prefix=snowball;         verfile=js/game.js ;;
+            new-year-recipes) prefix=recipes;          verfile=js/config.js ;;
+            quiz-time)        prefix=quiz-time;        verfile=config.js ;;
             *) echo "unknown game $GAME"; exit 1 ;;
           esac
+          # games: GAME_VERSION = '1.2.0' in game.js; mini-apps: version: "1.0.1" in config.js
           v=$(grep -oP "GAME_VERSION = '\K[^']+" "game/$verfile" | head -1)
-          [ -n "$v" ] || { echo "GAME_VERSION not found in $verfile"; exit 1; }
+          [ -n "$v" ] || v=$(grep -oP 'version:\s*"\K[^"]+' "game/$verfile" | head -1)
+          [ -n "$v" ] || { echo "version not found in $verfile"; exit 1; }
           [ -f game/android/gradlew ] || { echo "no android/ project in $GAME"; exit 1; }
           echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
           echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -92,6 +101,14 @@ jobs:
             snowball-game)
               ./build.sh 2>&1 | tee -a "$RUNNER_TEMP/build.log"
               unzip -q dist/snowball-vk.zip -d "$www"
+              ;;
+            new-year-recipes)
+              # the same files as the VK build (index.html, css/, js/, img/, Bridge) — tools/build-zip.py
+              python3 -I tools/build-zip.py --dir "$www" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+              ;;
+            quiz-time)
+              # only the app files (index.html, config/platform/analytics, Bridge, css/, js/, tests/, img/)
+              bash tools/build-web.sh "$www" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
               ;;
           esac
           test -f "$www/index.html"
