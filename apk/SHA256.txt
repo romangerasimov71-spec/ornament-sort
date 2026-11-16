@@ -1,4 +1,5 @@
 d2cd906104797a093c07b8f29703d4c87c16a56b635c83febc9563d3f3234793  apk/find-differences-1.2.0-release.apk
 e9d24f3d92dd7c4249e39920142c46e3e7bcb33184046c9e2ef00d13e0807bfe  apk/ornament-sort-1.0.1-release.apk
 e400ebf48f249ca675ca63fd0ce775d27e5e27d841f9152fb2d161fc9137cfb7  apk/quiz-time-1.0.1-release.apk
+120d53045a0c25812fd16ba45c8f5aeec63e289449cca19c46dbbb3ae6d256e0  apk/recipes-1.0.1-release.apk
 afc4529176d255f806928b6e0dd7617bbe39d53d22facdb278a50272ef7afe8c  apk/snowball-1.0.0-release.apk
