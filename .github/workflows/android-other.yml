@@ -1,0 +1,222 @@
+# Android APK (RuStore) for OTHER games of the studio, signed with the same key as Ornament Sort.
+# The signing secrets (KEYSTORE_BASE64, KEYSTORE_PASSWORD, KEY_ALIAS) live only in this repository,
+# so the other games are built here: checkout the public game repository (branch main), build its web
+# version, copy it into the game's own android/ project (kept in the game repository), build a release APK.
+# The APK goes to the branch `rustore-build` of THIS repository (folder apk/), next to Ornament Sort's APK:
+#   apk/find-differences-<version>-release.apk, apk/snowball-<version>-release.apk
+#   build-info-<game>.txt, apk/SHA256.txt (all APKs). Other games' files are never touched.
+# Run: Actions -> "Android APK (other games)" -> Run workflow -> game.  CLI: gh workflow run android-other.yml -f game=snowball-game
+name: Android APK (other games)
+
+on:
+  workflow_dispatch:
+    inputs:
+      game:
+        description: 'Game repository'
+        required: true
+        type: choice
+        options:
+          - find-differences
+          - snowball-game
+          - both
+      versionCode:
+        description: 'versionCode (raise for every new upload to RuStore)'
+        required: false
+        default: '1'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        game: ${{ fromJSON(inputs.game == 'both' && '["find-differences","snowball-game"]' || format('["{0}"]', inputs.game)) }}
+    concurrency:
+      group: android-other-${{ matrix.game }}
+      cancel-in-progress: false
+    env:
+      GAME: ${{ matrix.game }}
+      HAS_KEY: ${{ secrets.KEYSTORE_BASE64 != '' && secrets.KEYSTORE_PASSWORD != '' && secrets.KEY_ALIAS != '' }}
+    steps:
+      - name: Checkout the game (main)
+        uses: actions/checkout@v4
+        with:
+          repository: romangerasimov71-spec/${{ matrix.game }}
+          ref: main
+          path: game
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Game settings
+        id: cfg
+        run: |
+          case "$GAME" in
+            find-differences) prefix=find-differences; verfile=src/js/game.js ;;
+            snowball-game)    prefix=snowball;         verfile=js/game.js ;;
+            *) echo "unknown game $GAME"; exit 1 ;;
+          esac
+          v=$(grep -oP "GAME_VERSION = '\K[^']+" "game/$verfile" | head -1)
+          [ -n "$v" ] || { echo "GAME_VERSION not found in $verfile"; exit 1; }
+          [ -f game/android/gradlew ] || { echo "no android/ project in $GAME"; exit 1; }
+          echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git -C game rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "$GAME: prefix=$prefix version=$v"
+
+      - name: Web build -> android assets
+        working-directory: game
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP"
+          www=android/app/src/main/assets/www
+          rm -rf "$www" && mkdir -p "$www"
+          case "$GAME" in
+            find-differences)
+              # build.sh: esbuild from package-lock; the 100-level browser test is skipped here (it runs on every deploy)
+              npm ci --no-audit --no-fund 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+              SKIP_LEVEL_TEST=1 ./build.sh 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+              cp -R dist/vk/. "$www/"
+              rm -f "$www/.nojekyll"
+              ;;
+            snowball-game)
+              ./build.sh 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+              unzip -q dist/snowball-vk.zip -d "$www"
+              ;;
+          esac
+          test -f "$www/index.html"
+          ls -R "$www" | head -60
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        id: build
+        working-directory: game/android
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          VERSION_CODE: ${{ inputs.versionCode || '1' }}
+        run: |
+          set -o pipefail
+          chmod +x gradlew
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            ./gradlew --no-daemon --stacktrace assembleRelease -PversionCode="$VERSION_CODE" \
+              -PksFile="$RUNNER_TEMP/release.jks" -PksPass="$KEYSTORE_PASSWORD" -PksAlias="$KEY_ALIAS" \
+              2>&1 | tee -a "$RUNNER_TEMP/build.log"
+            src=app/build/outputs/apk/release/app-release.apk
+            kind=release
+          else
+            echo "No signing secrets: debug-signed build"
+            ./gradlew --no-daemon --stacktrace assembleDebug -PversionCode="$VERSION_CODE" 2>&1 | tee -a "$RUNNER_TEMP/build.log"
+            src=app/build/outputs/apk/debug/app-debug.apk
+            kind=debug
+          fi
+          mkdir -p "$RUNNER_TEMP/apk"
+          name="${{ steps.cfg.outputs.prefix }}-${{ steps.cfg.outputs.version }}-$kind.apk"
+          cp "$src" "$RUNNER_TEMP/apk/$name"
+          echo "file=$name" >> "$GITHUB_OUTPUT"
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          ls -la "$RUNNER_TEMP/apk"
+          rm -f "$RUNNER_TEMP/release.jks"
+
+      - name: Check APK (permissions, signature, contents)
+        run: |
+          set -o pipefail
+          f="$RUNNER_TEMP/apk/${{ steps.build.outputs.file }}"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          {
+            echo "== aapt dump badging"
+            "$BT/aapt" dump badging "$f" | grep -E "^(package:|sdkVersion|targetSdkVersion|application-label:|uses-permission|launchable-activity)" || true
+            echo "== apksigner"
+            "$BT/apksigner" verify --print-certs "$f" | head -5 || true
+            echo "== files"
+            unzip -l "$f" | grep -E "assets/www/(index.html|js/[a-z.-]+\.js)|classes.dex" || true
+          } | tee "$RUNNER_TEMP/apk-info.txt"
+          # the app must not ask for any permission
+          if "$BT/aapt" dump badging "$f" | grep -q "^uses-permission"; then echo "APK asks for permissions"; exit 1; fi
+
+      - name: Publish APK to branch rustore-build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREFIX: ${{ steps.cfg.outputs.prefix }}
+          FILE: ${{ steps.build.outputs.file }}
+        run: |
+          set -e
+          url="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          for attempt in 1 2 3 4 5; do
+            out="$RUNNER_TEMP/out$attempt"
+            rm -rf "$out"
+            if git ls-remote --exit-code --heads "$url" rustore-build >/dev/null 2>&1; then
+              git clone --depth 1 --branch rustore-build "$url" "$out"
+            else
+              git init -q -b rustore-build "$out"
+              git -C "$out" remote add origin "$url"
+            fi
+            cd "$out"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            mkdir -p apk
+            rm -f apk/"$PREFIX"-*.apk "build-log-$GAME.txt"   # only this game's old APK
+            cp "$RUNNER_TEMP/apk/$FILE" apk/
+            {
+              echo "APK: apk/$FILE"
+              echo "Game: romangerasimov71-spec/$GAME (main ${{ steps.cfg.outputs.sha }})"
+              echo "Signed: ${{ steps.build.outputs.kind }}"
+              echo "versionName: ${{ steps.cfg.outputs.version }}  versionCode: ${{ inputs.versionCode || '1' }}"
+              echo "Size: $(stat -c %s "apk/$FILE") bytes"
+              echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              echo "Built: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              echo
+              cat "$RUNNER_TEMP/apk-info.txt"
+            } > "build-info-$GAME.txt"
+            sha256sum apk/*.apk > apk/SHA256.txt
+            git add -A
+            git commit -q -m "APK ${{ steps.build.outputs.kind }} $GAME ${{ steps.cfg.outputs.version }} из ${GAME} ${{ steps.cfg.outputs.sha }}"
+            if git push -q origin HEAD:rustore-build; then exit 0; fi
+            echo "push rejected (another build pushed first), retry $attempt"
+            cd "$RUNNER_TEMP"
+            sleep $((attempt * 5))
+          done
+          exit 1
+
+      - name: On failure - save the log tail to branch rustore-build (build-log-<game>.txt)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          url="https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
+          for attempt in 1 2 3; do
+            out="$RUNNER_TEMP/outlog$attempt"
+            rm -rf "$out"
+            if git ls-remote --exit-code --heads "$url" rustore-build >/dev/null 2>&1; then
+              git clone --depth 1 --branch rustore-build "$url" "$out"
+            else
+              git init -q -b rustore-build "$out"
+              git -C "$out" remote add origin "$url"
+            fi
+            cd "$out"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            {
+              echo "FAILED build of $GAME at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+              echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+              echo
+              tail -n 400 "$RUNNER_TEMP/build.log" 2>/dev/null || echo "(no build log)"
+            } > "build-log-$GAME.txt"
+            git add "build-log-$GAME.txt"
+            git commit -q -m "Сборка APK $GAME упала: build-log-$GAME.txt"
+            if git push -q origin HEAD:rustore-build; then exit 0; fi
+            cd "$RUNNER_TEMP"; sleep $((attempt * 5))
+          done

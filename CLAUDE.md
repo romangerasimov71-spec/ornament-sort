@@ -78,6 +78,12 @@ playgama-bridge-config.json) и делает архив `dist/ornament-sort.zip`
 - Подпись: секреты репозитория `KEYSTORE_BASE64` (файл .jks в base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS`
   (пароль ключа = пароль хранилища). Есть все три — собирается release, нет — debug (только проверить сборку,
   в RuStore debug не загружают). Ключ хранить у Романа: тем же ключом подписываются все обновления.
+- **Другие игры студии** (ключ подписи один на все игры, секреты — только здесь): workflow `.github/workflows/android-other.yml`
+  (ручной запуск, игра `find-differences` | `snowball-game` | `both`, поле `versionCode`). Берёт публичный репозиторий игры
+  (`main`), собирает её веб-сборку и её `android/`, подписывает этим ключом и кладёт в ту же ветку `rustore-build`:
+  `apk/find-differences-<версия>-release.apk`, `apk/snowball-<версия>-release.apk`, `build-info-<игра>.txt`
+  (упала — `build-log-<игра>.txt`); `apk/SHA256.txt` — по всем APK. Файлы Сортировки он не трогает, а `android.yml`
+  теперь удаляет только свои `apk/ornament-sort-*.apk`. Запуск: `gh workflow run android-other.yml -f game=both`.
 - Локально (нужен Android SDK): скопировать игру в assets как в workflow, затем `cd android && ./gradlew assembleDebug`.
 - Иконки: `python3 android/tools/make_icons.py` (из `release/vk/assets/icon-576x576.png`). Карточка RuStore —
   `release/rustore/` (тексты, иконка 512, скриншоты — `release/_src/capture-rustore.js`).

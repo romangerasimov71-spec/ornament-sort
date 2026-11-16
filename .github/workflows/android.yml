@@ -124,8 +124,9 @@ jobs:
           cd "$out"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -rf apk build-log.txt
+          # only this game's files: the branch also holds other games' APKs (workflow android-other.yml)
           mkdir -p apk
+          rm -f apk/ornament-sort-*.apk build-log.txt
           cp "$RUNNER_TEMP/apk/${{ steps.build.outputs.file }}" apk/
           {
             echo "APK: apk/${{ steps.build.outputs.file }}"
