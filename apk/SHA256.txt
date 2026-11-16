@@ -1,3 +1,3 @@
 ca4efe683a604663a2a973d05c437909b8bb783c4e42045d40d42de074983d05  apk/find-differences-1.2.0-release.apk
 e9d24f3d92dd7c4249e39920142c46e3e7bcb33184046c9e2ef00d13e0807bfe  apk/ornament-sort-1.0.1-release.apk
-b403d740cb03281f1d9d7b804ed7bde3670246e6c4707b9c6dfa3811499d8da3  apk/snowball-1.0.0-release.apk
+afc4529176d255f806928b6e0dd7617bbe39d53d22facdb278a50272ef7afe8c  apk/snowball-1.0.0-release.apk
