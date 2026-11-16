@@ -112,7 +112,7 @@ jobs:
               ;;
           esac
           test -f "$www/index.html"
-          ls -R "$www" | head -60
+          ls -R "$www" | head -60 || true   # many files: head closes the pipe early
 
       - uses: gradle/actions/setup-gradle@v4
 
