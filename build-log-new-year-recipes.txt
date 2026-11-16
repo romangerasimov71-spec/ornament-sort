@@ -1,0 +1,4 @@
+FAILED build of new-year-recipes at 2026-11-16T16:02:14Z
+Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43902937272
+
+папка: /home/runner/work/ornament-sort/ornament-sort/game/android/app/src/main/assets/www 892 файлов
