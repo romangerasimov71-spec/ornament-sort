@@ -1,0 +1,27 @@
+APK: apk/snowball-1.0.0-release.apk
+Game: romangerasimov71-spec/snowball-game (main 441590acc742a6ce243f77cd03847e4a40521cb7)
+Signed: release
+versionName: 1.0.0  versionCode: 1
+Size: 4352824 bytes
+Run: https://github.com/romangerasimov71-spec/ornament-sort/actions/runs/43890371087
+Built: 2026-11-16T14:53:48Z
+
+== aapt dump badging
+package: name='ru.german71.snowball' versionCode='1' versionName='1.0.0' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+sdkVersion:'24'
+targetSdkVersion:'35'
+application-label:'Снежный Ком'
+launchable-activity: name='ru.german71.snowball.MainActivity'  label='' icon=''
+== apksigner
+V2 Signer: certificate DN: CN=German71, O=German71, C=RU
+V2 Signer: certificate SHA-256 digest: bfcd4e90566fef4ec2c61aaf1e63dcd87531e72fd1a5f57f55c3c83d7cf01ee2
+V2 Signer: certificate SHA-1 digest: 136a8ec63ca12341cc8420451da0ed66eb10cf12
+V2 Signer: certificate MD5 digest: 92c95a7ec7298f5cb771e215804688e3
+== files
+  4644180  1981-01-01 01:01   classes.dex
+    18961  1981-01-01 01:01   assets/www/index.html
+     8103  1981-01-01 01:01   assets/www/js/audio.js
+    99163  1981-01-01 01:01   assets/www/js/game.js
+    10314  1981-01-01 01:01   assets/www/js/platform-vk.js
+     7853  1981-01-01 01:01   assets/www/js/sdk.js
+     4503  1981-01-01 01:01   assets/www/js/vk-bridge.min.js
